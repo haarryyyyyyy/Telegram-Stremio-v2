@@ -17,7 +17,7 @@ class StreamTracker:
         file_size: int,
         client_index: int = 0,
         dc_id: Optional[int] = None,
-        node_name: str = "VM 1 (Oracle)",
+        node_name: str = "Stremio Server",
         user_name: Optional[str] = None,
         ip: Optional[str] = None,
     ) -> Dict[str, Any]:

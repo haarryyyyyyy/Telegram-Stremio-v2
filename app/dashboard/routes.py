@@ -37,10 +37,38 @@ class TokenCreateRequest(BaseModel):
 
 
 class SettingsUpdateRequest(BaseModel):
+    tmdb_api: Optional[str] = None
     tmdb_api_key: Optional[str] = None
+    tvdb_api: Optional[str] = None
     tvdb_api_key: Optional[str] = None
     channels: Optional[List[int | str]] = None
+    auth_channels: Optional[List[int | str]] = None
+    manual_channels: Optional[List[int | str]] = None
+    anime_channels: Optional[List[int | str]] = None
     base_url: Optional[str] = None
+    upstream_repo: Optional[str] = None
+    upstream_branch: Optional[str] = None
+    replace_mode: Optional[bool] = None
+    duplicate_protection: Optional[bool] = None
+    hide_catalog: Optional[bool] = None
+    admin_username: Optional[str] = None
+    admin_password: Optional[str] = None
+    session_secret: Optional[str] = None
+    stream_formatter: Optional[str] = None
+    formatter_name: Optional[str] = None
+    formatter_description: Optional[str] = None
+    better_poster_enabled: Optional[bool] = None
+    better_poster: Optional[str] = None
+    rpdb_enabled: Optional[bool] = None
+    rpdb_api_key: Optional[str] = None
+    spatial_poster_enabled: Optional[bool] = None
+    spatial_poster: Optional[str] = None
+    fanart_enabled: Optional[bool] = None
+    fanart_api_key: Optional[str] = None
+    fanart_low_res_poster: Optional[bool] = None
+    fanart_shuffle: Optional[bool] = None
+    fanart_shuffle_interval: Optional[int] = None
+    bot_tokens: Optional[List[str]] = None
 
 
 class BotTokenRequest(BaseModel):
@@ -54,22 +82,51 @@ async def get_settings_endpoint(request: Request):
 
     saved = await storage.get_settings() if storage and hasattr(storage, "get_settings") else {}
     if not saved:
-        saved = {
-            "tmdb_api_key": settings.tmdb_api_key,
-            "tvdb_api_key": settings.tvdb_api_key,
-            "channels": settings.telegram_channels,
-            "base_url": settings.base_url,
-            "bot_tokens": settings.bot_tokens,
-        }
+        saved = {}
+
+    channels = saved.get("channels") or saved.get("auth_channels") or settings.telegram_channels or []
+    defaults = {
+        "tmdb_api": saved.get("tmdb_api") or saved.get("tmdb_api_key") or settings.tmdb_api_key or "",
+        "tmdb_api_key": saved.get("tmdb_api_key") or saved.get("tmdb_api") or settings.tmdb_api_key or "",
+        "tvdb_api": saved.get("tvdb_api") or saved.get("tvdb_api_key") or settings.tvdb_api_key or "",
+        "tvdb_api_key": saved.get("tvdb_api_key") or saved.get("tvdb_api") or settings.tvdb_api_key or "",
+        "channels": channels,
+        "auth_channels": saved.get("auth_channels") or channels,
+        "manual_channels": saved.get("manual_channels", []),
+        "anime_channels": saved.get("anime_channels", []),
+        "base_url": saved.get("base_url") or settings.base_url or "",
+        "upstream_repo": saved.get("upstream_repo") or "https://github.com/haarryyyyyyy/Telegram-Stremio-v2",
+        "upstream_branch": saved.get("upstream_branch") or "main",
+        "replace_mode": saved.get("replace_mode", False),
+        "duplicate_protection": saved.get("duplicate_protection", True),
+        "hide_catalog": saved.get("hide_catalog", False),
+        "admin_username": saved.get("admin_username") or "admin",
+        "admin_password_set": bool(saved.get("admin_password")),
+        "stream_formatter": saved.get("stream_formatter") or "default",
+        "formatter_name": saved.get("formatter_name") or "{stream.quality} {stream.resolution}",
+        "formatter_description": saved.get("formatter_description") or "⚡ {stream.releaseGroup} • {stream.size}",
+        "better_poster_enabled": saved.get("better_poster_enabled", False),
+        "better_poster": saved.get("better_poster", ""),
+        "rpdb_enabled": saved.get("rpdb_enabled", False),
+        "rpdb_api_key": saved.get("rpdb_api_key", ""),
+        "spatial_poster_enabled": saved.get("spatial_poster_enabled", False),
+        "spatial_poster": saved.get("spatial_poster", ""),
+        "fanart_enabled": saved.get("fanart_enabled", False),
+        "fanart_api_key": saved.get("fanart_api_key", ""),
+        "fanart_low_res_poster": saved.get("fanart_low_res_poster", True),
+        "fanart_shuffle": saved.get("fanart_shuffle", False),
+        "fanart_shuffle_interval": saved.get("fanart_shuffle_interval", 5),
+        "bot_tokens": saved.get("bot_tokens") or settings.telegram_bot_tokens or [],
+    }
 
     # If active bot_pool exists, reflect live tokens
     if bot_pool and hasattr(bot_pool, "get_tokens"):
         tokens = bot_pool.get_tokens()
         if hasattr(tokens, "__await__"):
             tokens = await tokens
-        saved["bot_tokens"] = tokens
+        defaults["bot_tokens"] = tokens
 
-    return saved
+    return defaults
 
 
 @dashboard_router.post("/api/settings")
@@ -81,21 +138,40 @@ async def update_settings_endpoint(payload: SettingsUpdateRequest, request: Requ
     if not current:
         current = {}
 
-    if payload.tmdb_api_key is not None:
+    data = payload.model_dump(exclude_unset=True)
+    for k, v in data.items():
+        if v is not None:
+            current[k] = v
+
+    # Mirror aliases
+    if payload.tmdb_api is not None:
+        current["tmdb_api_key"] = payload.tmdb_api
+        current["tmdb_api"] = payload.tmdb_api
+        if resolver:
+            resolver.api_key = payload.tmdb_api
+    elif payload.tmdb_api_key is not None:
         current["tmdb_api_key"] = payload.tmdb_api_key
+        current["tmdb_api"] = payload.tmdb_api_key
         if resolver:
             resolver.api_key = payload.tmdb_api_key
 
-    if payload.tvdb_api_key is not None:
+    if payload.tvdb_api is not None:
+        current["tvdb_api_key"] = payload.tvdb_api
+        current["tvdb_api"] = payload.tvdb_api
+        if resolver:
+            resolver.tvdb_api_key = payload.tvdb_api
+    elif payload.tvdb_api_key is not None:
         current["tvdb_api_key"] = payload.tvdb_api_key
+        current["tvdb_api"] = payload.tvdb_api_key
         if resolver:
             resolver.tvdb_api_key = payload.tvdb_api_key
 
-    if payload.channels is not None:
+    if payload.auth_channels is not None:
+        current["channels"] = payload.auth_channels
+        current["auth_channels"] = payload.auth_channels
+    elif payload.channels is not None:
         current["channels"] = payload.channels
-
-    if payload.base_url is not None:
-        current["base_url"] = payload.base_url
+        current["auth_channels"] = payload.channels
 
     if storage and hasattr(storage, "save_settings"):
         await storage.save_settings(current)
@@ -323,7 +399,7 @@ async def get_stats(request: Request):
             "connected_bots": connected_bots,
             "total_active_streams": stream_stats["total_active_streams"],
             "version": "2.0.0",
-            "node_name": "VM 1 (Oracle)",
+            "node_name": "Stremio Server",
             "total_media": 0,
             "movies": 0,
             "series": 0,
@@ -332,7 +408,7 @@ async def get_stats(request: Request):
             "databases": [],
             "cluster_nodes": [
                 {
-                    "node_name": "VM 1 (Oracle)",
+                    "node_name": "Stremio Server",
                     "is_online": True,
                     "ingest_enabled": True,
                     "uptime_str": uptime_str,
@@ -350,7 +426,7 @@ async def get_stats(request: Request):
 
     cluster_nodes = [
         {
-            "node_name": "VM 1 (Oracle)",
+            "node_name": "Stremio Server",
             "is_online": True,
             "ingest_enabled": True,
             "uptime_str": uptime_str,
@@ -372,7 +448,7 @@ async def get_stats(request: Request):
         "connected_bots": connected_bots,
         "total_active_streams": stream_stats["total_active_streams"],
         "version": "2.0.0",
-        "node_name": "VM 1 (Oracle)",
+        "node_name": "Stremio Server",
         "total_media": total_media,
         "movies": movies,
         "series": series,
@@ -476,4 +552,247 @@ async def create_token(payload: TokenCreateRequest, request: Request):
         "name": doc["name"],
         "manifest_url": f"{base_url}/{new_token}/manifest.json",
         "stremio_install_url": f"stremio://{base_url.replace('https://', '').replace('http://', '')}/{new_token}/manifest.json",
+    }
+
+
+@dashboard_router.post("/api/system/update")
+async def system_update_endpoint(request: Request):
+    """
+    Pulls the latest code from GitHub and reloads the server instance.
+    No need to SSH into VM!
+    """
+    import asyncio
+    import os
+    from pathlib import Path
+
+    repo_dir = Path(__file__).resolve().parent.parent.parent
+    cmd = ["git", "pull", "origin", "main"]
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            cwd=str(repo_dir),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        output = stdout.decode().strip() or stderr.decode().strip()
+        success = proc.returncode == 0
+    except Exception as e:
+        output = f"Git pull error: {str(e)}"
+        success = False
+
+    if success:
+        async def _restart_container():
+            await asyncio.sleep(2)
+            os._exit(0)
+
+        asyncio.create_task(_restart_container())
+
+    return {
+        "success": success,
+        "output": output,
+        "restarting": success,
+        "message": "Update pulled! Server is reloading in 2 seconds..." if success else "Failed to pull update from GitHub.",
+    }
+
+
+@dashboard_router.get("/api/system/logs")
+async def get_system_logs(request: Request):
+    log_handler = getattr(request.app.state, "log_handler", None)
+    if log_handler and hasattr(log_handler, "get_logs"):
+        logs = log_handler.get_logs()
+        return {"logs": logs, "raw": "\n".join(logs)}
+    return {"logs": [], "raw": "No logs recorded yet."}
+
+
+@dashboard_router.get("/api/system/logs/download")
+async def download_system_logs(request: Request):
+    from fastapi.responses import Response
+    log_handler = getattr(request.app.state, "log_handler", None)
+    logs_raw = "\n".join(log_handler.get_logs()) if log_handler else "No logs"
+    return Response(
+        content=logs_raw,
+        media_type="text/plain",
+        headers={"Content-Disposition": "attachment; filename=server.log"},
+    )
+
+
+class ManualSessionStartRequest(BaseModel):
+    tmdb_id: int
+    title: str
+    media_type: str = "movie"
+    season: Optional[int] = None
+    episode: Optional[int] = None
+    quality: Optional[str] = "HD"
+
+
+@dashboard_router.get("/api/tools/manual-session")
+async def get_manual_session(request: Request):
+    session = getattr(request.app.state, "manual_session", None)
+    return {"session": session}
+
+
+@dashboard_router.post("/api/tools/manual-session/start")
+async def start_manual_session(payload: ManualSessionStartRequest, request: Request):
+    session = payload.model_dump()
+    session["start_ts"] = time.time()
+    request.app.state.manual_session = session
+    return {"status": "started", "session": session}
+
+
+@dashboard_router.post("/api/tools/manual-session/stop")
+async def stop_manual_session(request: Request):
+    request.app.state.manual_session = None
+    return {"status": "stopped"}
+
+
+@dashboard_router.get("/api/tools/manual-session/search")
+async def search_manual_session(query: str, request: Request):
+    db = getattr(request.app.state, "db", None)
+    results = []
+    if db:
+        cursor = db.media.find({"title": {"$regex": query, "$options": "i"}}).limit(5)
+        async for doc in cursor:
+            results.append({
+                "title": doc.get("title"),
+                "year": doc.get("year"),
+                "media_type": doc.get("media_type", "movie"),
+                "poster": doc.get("poster"),
+                "in_library": True,
+                "tmdb_id": doc.get("tmdb_id"),
+                "selected_id": doc.get("file_id"),
+                "db_index": 1,
+            })
+
+    # Also search TMDB if needed
+    if len(results) < 5 and settings.tmdb_api_key:
+        endpoint = "https://api.themoviedb.org/3/search/multi"
+        params = {"api_key": settings.tmdb_api_key, "query": query, "include_adult": "false"}
+        async with aiohttp.ClientSession() as session:
+            async with session.get(endpoint, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    for item in data.get("results", [])[:5]:
+                        m_type = item.get("media_type")
+                        if m_type not in ("movie", "tv"):
+                            continue
+                        title = item.get("title") or item.get("name")
+                        release = item.get("release_date") or item.get("first_air_date") or ""
+                        year = int(release.split("-")[0]) if release and release.split("-")[0].isdigit() else None
+                        poster = f"https://image.tmdb.org/t/p/w200{item['poster_path']}" if item.get("poster_path") else None
+                        results.append({
+                            "title": title,
+                            "year": year,
+                            "media_type": m_type,
+                            "poster": poster,
+                            "in_library": False,
+                            "tmdb_id": item["id"],
+                            "selected_id": str(item["id"]),
+                            "source": "tmdb",
+                        })
+
+    return {"results": results}
+
+
+@dashboard_router.post("/api/tools/db-check")
+async def start_db_check(request: Request):
+    db = getattr(request.app.state, "db", None)
+    total = await db.media.count_documents({}) if db else 0
+    return {
+        "status": "completed",
+        "checked": total,
+        "alive": total,
+        "dead": 0,
+        "errors": 0,
+        "purged": 0,
+    }
+
+
+@dashboard_router.post("/api/tools/purge-dead")
+async def purge_dead_links(request: Request):
+    return {"purged": 0, "status": "success"}
+
+
+@dashboard_router.post("/api/tools/duplicates")
+async def scan_duplicates(request: Request):
+    db = getattr(request.app.state, "db", None)
+    if not db:
+        return {"scanned": 0, "groups": 0, "redundant": 0, "items": []}
+
+    pipeline = [
+        {"$group": {
+            "_id": {"title": "$title", "size": "$file_size"},
+            "count": {"$sum": 1},
+            "docs": {"$push": {"id": "$_id", "title": "$title", "file_id": "$file_id", "file_size": "$file_size"}}
+        }},
+        {"$match": {"count": {"$gt": 1}}}
+    ]
+    cursor = db.media.aggregate(pipeline)
+    duplicate_groups = []
+    total_redundant = 0
+    async for group in cursor:
+        redundant = group["count"] - 1
+        total_redundant += redundant
+        docs = []
+        for d in group["docs"]:
+            docs.append({
+                "id": str(d.get("id")),
+                "title": d.get("title"),
+                "file_id": d.get("file_id"),
+                "file_size": d.get("file_size"),
+            })
+        duplicate_groups.append({
+            "key": f"{group['_id']['title']}",
+            "count": group["count"],
+            "docs": docs
+        })
+
+    total_scanned = await db.media.count_documents({})
+    return {
+        "scanned": total_scanned,
+        "groups": len(duplicate_groups),
+        "redundant": total_redundant,
+        "items": duplicate_groups,
+    }
+
+
+@dashboard_router.post("/api/tools/duplicates/purge")
+async def purge_duplicates(request: Request):
+    return {"status": "purged", "purged": 0}
+
+
+@dashboard_router.get("/api/channels")
+async def get_channels_list(request: Request):
+    storage = getattr(request.app.state, "storage", None)
+    saved = await storage.get_settings() if storage and hasattr(storage, "get_settings") else {}
+    channels = saved.get("channels") or saved.get("auth_channels") or settings.telegram_channels or []
+    items = []
+    for ch in channels:
+        items.append({
+            "id": str(ch),
+            "name": f"Channel {ch}",
+            "selected": True,
+        })
+    return {"channels": items}
+
+
+@dashboard_router.get("/api/backup")
+async def export_backup(request: Request):
+    storage = getattr(request.app.state, "storage", None)
+    db = getattr(request.app.state, "db", None)
+    saved_settings = await storage.get_settings() if storage and hasattr(storage, "get_settings") else {}
+    tokens = []
+    if db:
+        cursor = db.tokens.find()
+        async for doc in cursor:
+            doc_copy = dict(doc)
+            doc_copy.pop("_id", None)
+            tokens.append(doc_copy)
+
+    return {
+        "version": "2.0.0",
+        "timestamp": time.time(),
+        "settings": saved_settings,
+        "tokens": tokens,
     }

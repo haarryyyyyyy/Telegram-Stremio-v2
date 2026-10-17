@@ -99,8 +99,10 @@ async def test_dashboard_page_render(mock_app):
         assert resp.status_code == 200
         assert "TG Stremio" in resp.text
         assert "System Overview" in resp.text
-        assert "Cluster VM Nodes" in resp.text
         assert "Live Network" in resp.text
+        assert "Tokens" in resp.text
+        assert "Tools" in resp.text
+        assert "Settings" in resp.text
 
 
 @pytest.mark.asyncio
@@ -147,3 +149,80 @@ async def test_streams_endpoint(mock_app):
         assert data["total_active_streams"] == 1
         assert len(data["active_streams"]) == 1
         assert data["active_streams"][0]["title"] == "Test Movie"
+
+
+@pytest.mark.asyncio
+async def test_tools_manual_session(mock_app):
+    transport = ASGITransport(app=mock_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Start manual session
+        start_payload = {
+            "tmdb_id": 19169,
+            "title": "Alaipayuthey",
+            "media_type": "movie"
+        }
+        res = await client.post("/admin/api/tools/manual-session/start", json=start_payload)
+        assert res.status_code == 200
+        assert res.json()["status"] == "started"
+
+        # Check manual session status
+        check_res = await client.get("/admin/api/tools/manual-session")
+        assert check_res.status_code == 200
+        assert check_res.json()["session"]["title"] == "Alaipayuthey"
+
+        # Stop manual session
+        stop_res = await client.post("/admin/api/tools/manual-session/stop")
+        assert stop_res.status_code == 200
+        assert stop_res.json()["status"] == "stopped"
+
+
+@pytest.mark.asyncio
+async def test_tools_db_check_and_duplicates(mock_app):
+    mock_app.state.db.media.count_documents = AsyncMock(return_value=10)
+    mock_app.state.db.media.aggregate = MagicMock()
+
+    class AsyncCursor:
+        def __aiter__(self):
+            return self
+        async def __anext__(self):
+            raise StopAsyncIteration
+
+    mock_app.state.db.media.aggregate.return_value = AsyncCursor()
+
+    transport = ASGITransport(app=mock_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # DB Check
+        res_check = await client.post("/admin/api/tools/db-check")
+        assert res_check.status_code == 200
+        assert res_check.json()["status"] == "completed"
+
+        # Duplicates
+        res_dup = await client.post("/admin/api/tools/duplicates")
+        assert res_dup.status_code == 200
+        assert "groups" in res_dup.json()
+
+
+@pytest.mark.asyncio
+async def test_system_logs_and_backup(mock_app):
+    mock_app.state.storage.get_settings.return_value = {"base_url": "http://test"}
+    mock_app.state.db.tokens.find = MagicMock()
+
+    class AsyncCursor:
+        def __aiter__(self):
+            return self
+        async def __anext__(self):
+            raise StopAsyncIteration
+
+    mock_app.state.db.tokens.find.return_value = AsyncCursor()
+
+    transport = ASGITransport(app=mock_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Logs
+        logs_res = await client.get("/admin/api/system/logs")
+        assert logs_res.status_code == 200
+        assert "logs" in logs_res.json()
+
+        # Backup
+        backup_res = await client.get("/admin/api/backup")
+        assert backup_res.status_code == 200
+        assert "version" in backup_res.json()

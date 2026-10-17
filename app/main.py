@@ -17,10 +17,31 @@ from app.streamer.pyro_worker import BotPoolManager
 from app.streamer.multiplexer import StreamMultiplexer
 from app.streamer.tracker import StreamTracker
 
+from collections import deque
+
+class InMemoryLogHandler(logging.Handler):
+    def __init__(self, capacity: int = 400):
+        super().__init__()
+        self.buffer = deque(maxlen=capacity)
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            self.buffer.append(msg)
+        except Exception:
+            pass
+
+    def get_logs(self) -> list:
+        return list(self.buffer)
+
+log_handler = InMemoryLogHandler()
+log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
+logging.getLogger().addHandler(log_handler)
 logger = logging.getLogger("telegram_stremio_v2")
 
 
@@ -112,6 +133,7 @@ def create_app(skip_lifespan_init: bool = False) -> FastAPI:
     app = FastAPI(**app_kwargs)
     app.state.stream_tracker = StreamTracker()
     app.state.start_time = time.time()
+    app.state.log_handler = log_handler
 
     # Enable CORS for Stremio desktop and web apps
     app.add_middleware(
