@@ -12,11 +12,9 @@ services:
     mem_limit: 450m
 
   mongodb:
-    image: mongo:6-jammy
+    image: mongo:4.4
     container_name: stremio-mongo-v2
     restart: unless-stopped
-    command: ["--wiredTigerCacheSizeGB", "0.25"]
-    mem_limit: 250m
     volumes:
       - mongo_data:/data/db
     ports:
