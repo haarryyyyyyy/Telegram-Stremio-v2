@@ -7,13 +7,13 @@ load_dotenv()
 
 
 class Settings(BaseModel):
-    mongo_uri: str = Field(default_factory=lambda: os.getenv("MONGO_URI", "mongodb://localhost:27017"))
+    mongo_uri: str = Field(default_factory=lambda: os.getenv("MONGO_URI") or os.getenv("DATABASE") or "mongodb://localhost:27017")
     db_name: str = Field(default_factory=lambda: os.getenv("DB_NAME", "telegram_stremio_v2"))
     tmdb_api_key: str = Field(default_factory=lambda: os.getenv("TMDB_API_KEY", ""))
     tvdb_api_key: str = Field(default_factory=lambda: os.getenv("TVDB_API_KEY", ""))
-    telegram_api_id: int = Field(default_factory=lambda: int(os.getenv("TELEGRAM_API_ID", "0")))
-    telegram_api_hash: str = Field(default_factory=lambda: os.getenv("TELEGRAM_API_HASH", ""))
-    bot_tokens_raw: str = Field(default_factory=lambda: os.getenv("BOT_TOKENS", ""))
+    telegram_api_id: int = Field(default_factory=lambda: int(os.getenv("TELEGRAM_API_ID") or os.getenv("API_ID") or "0"))
+    telegram_api_hash: str = Field(default_factory=lambda: os.getenv("TELEGRAM_API_HASH") or os.getenv("API_HASH") or "")
+    bot_tokens_raw: str = Field(default_factory=lambda: os.getenv("BOT_TOKENS") or os.getenv("BOT_TOKEN") or "")
     telegram_channels_raw: str = Field(default_factory=lambda: os.getenv("TELEGRAM_CHANNELS", ""))
     admin_password: str = Field(default_factory=lambda: os.getenv("ADMIN_PASSWORD", "admin123"))
     base_url: str = Field(default_factory=lambda: os.getenv("BASE_URL", "http://localhost:8000").rstrip("/"))
