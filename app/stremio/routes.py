@@ -10,7 +10,107 @@ stremio_router = APIRouter(tags=["Stremio"])
 
 
 @stremio_router.get("/{token}/manifest.json")
-async def get_manifest(token: str):
+async def get_manifest(token: str, request: Request):
+    catalogs = [
+        {
+            "id": "spotlight",
+            "type": "movie",
+            "name": "🌟 15m Spotlight",
+            "extra": [
+                {"name": "search", "isRequired": False},
+                {"name": "skip", "isRequired": False},
+            ],
+        },
+        {
+            "id": "recent",
+            "type": "movie",
+            "name": "🆕 Recently Added",
+            "extra": [
+                {"name": "search", "isRequired": False},
+                {"name": "skip", "isRequired": False},
+            ],
+        },
+        {
+            "id": "recommended",
+            "type": "movie",
+            "name": "🎬 Recommended For You",
+            "extra": [
+                {"name": "search", "isRequired": False},
+                {"name": "skip", "isRequired": False},
+            ],
+        },
+        {
+            "id": "spotlight",
+            "type": "series",
+            "name": "🌟 15m TV & Anime",
+            "extra": [
+                {"name": "search", "isRequired": False},
+                {"name": "skip", "isRequired": False},
+            ],
+        },
+        {
+            "id": "recent",
+            "type": "series",
+            "name": "🆕 Recent TV & Anime",
+            "extra": [
+                {"name": "search", "isRequired": False},
+                {"name": "skip", "isRequired": False},
+            ],
+        },
+    ]
+
+    db = getattr(request.app.state, "db", None)
+    if db:
+        try:
+            custom_catalogs = await db.get_custom_catalogs(visible_only=True)
+            for c in custom_catalogs:
+                # Visibility check: public or matching token
+                vis = c.get("visibility", "public")
+                if vis == "owner":
+                    continue
+                if vis == "tokens" and token not in (c.get("allowed_tokens") or []):
+                    continue
+
+                cid = f"custom_{c['_id']}"
+                items = c.get("items") or []
+                has_movie = any(it.get("media_type") == "movie" for it in items)
+                has_series = any(it.get("media_type") in ("tv", "series") for it in items)
+                cat_name = c.get("name") or "Catalog"
+
+                if has_movie or not items:
+                    catalogs.append({
+                        "id": cid,
+                        "type": "movie",
+                        "name": cat_name,
+                        "extra": [
+                            {"name": "search", "isRequired": False},
+                            {"name": "skip", "isRequired": False},
+                        ],
+                    })
+                if has_series:
+                    catalogs.append({
+                        "id": cid,
+                        "type": "series",
+                        "name": cat_name,
+                        "extra": [
+                            {"name": "search", "isRequired": False},
+                            {"name": "skip", "isRequired": False},
+                        ],
+                    })
+
+            # Apply order
+            order = await db.get_catalog_order()
+            if order:
+                rank = {k: i for i, k in enumerate(order)}
+
+                def _crank(cat_entry):
+                    k = f"{cat_entry.get('id')}::{cat_entry.get('type')}"
+                    return rank.get(k, rank.get(cat_entry.get("id"), len(order) + 1))
+
+                catalogs.sort(key=_crank)
+        except Exception:
+            pass
+
     return {
         "id": "community.telegram.stremio.v2",
         "version": "2.0.0",
@@ -18,53 +118,7 @@ async def get_manifest(token: str):
         "description": "Blazing-fast multi-bot Telegram streaming engine with dynamic 15m spotlight and smart catalogs.",
         "resources": ["catalog", "stream"],
         "types": ["movie", "series"],
-        "catalogs": [
-            {
-                "id": "spotlight",
-                "type": "movie",
-                "name": "🌟 15m Spotlight",
-                "extra": [
-                    {"name": "search", "isRequired": False},
-                    {"name": "skip", "isRequired": False},
-                ],
-            },
-            {
-                "id": "recent",
-                "type": "movie",
-                "name": "🆕 Recently Added",
-                "extra": [
-                    {"name": "search", "isRequired": False},
-                    {"name": "skip", "isRequired": False},
-                ],
-            },
-            {
-                "id": "recommended",
-                "type": "movie",
-                "name": "🎬 Recommended For You",
-                "extra": [
-                    {"name": "search", "isRequired": False},
-                    {"name": "skip", "isRequired": False},
-                ],
-            },
-            {
-                "id": "spotlight",
-                "type": "series",
-                "name": "🌟 15m TV & Anime",
-                "extra": [
-                    {"name": "search", "isRequired": False},
-                    {"name": "skip", "isRequired": False},
-                ],
-            },
-            {
-                "id": "recent",
-                "type": "series",
-                "name": "🆕 Recent TV & Anime",
-                "extra": [
-                    {"name": "search", "isRequired": False},
-                    {"name": "skip", "isRequired": False},
-                ],
-            },
-        ],
+        "catalogs": catalogs,
     }
 
 

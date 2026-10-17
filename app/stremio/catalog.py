@@ -37,6 +37,7 @@ class CatalogManager:
         db: Optional[Any] = None,
         spotlight_interval_seconds: int = 900,
     ):
+        self.db = db
         if db:
             self.library_provider = library_provider or db.get_library_items
             self.recommendation_provider = recommendation_provider or db.get_recently_watched_ids
@@ -71,6 +72,27 @@ class CatalogManager:
 
         now = current_timestamp if current_timestamp is not None else time.time()
 
+        if catalog_id.startswith("custom_"):
+            cid = catalog_id.removeprefix("custom_")
+            custom_items = []
+            if hasattr(self, "db") and self.db:
+                cat = await self.db.get_custom_catalog(cid)
+                if cat:
+                    target = "series" if catalog_type in ("series", "anime") else "movie"
+                    for it in cat.get("items") or []:
+                        m_type = it.get("media_type")
+                        if (target == "series" and m_type in ("tv", "series", "anime")) or (target == "movie" and m_type == "movie"):
+                            custom_items.append(
+                                StremioMetaItem(
+                                    id=f"tmdb:{it['tmdb_id']}",
+                                    type=target,
+                                    name=it.get("title") or f"TMDb {it['tmdb_id']}",
+                                    poster=it.get("poster"),
+                                    year=it.get("year"),
+                                )
+                            )
+            return custom_items[skip:]
+
         if catalog_id == "spotlight":
             # 15-minute rotation window
             time_slot = int(now // self.ROTATION_INTERVAL_SECONDS)
@@ -82,6 +104,8 @@ class CatalogManager:
         elif catalog_id == "recommended" and self.recommendation_provider:
             # Filter and order based on user's personal recommendation IDs
             rec_ids = self.recommendation_provider(token)
+            if hasattr(rec_ids, "__await__"):
+                rec_ids = await rec_ids
             deduped_items = [unique_by_id[tmdb_id] for tmdb_id in rec_ids if tmdb_id in unique_by_id]
 
         result = []

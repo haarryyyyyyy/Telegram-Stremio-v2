@@ -31,6 +31,10 @@ class Database:
     def settings(self):
         return self.db["settings"]
 
+    @property
+    def custom_catalogs(self):
+        return self.db["custom_catalogs"]
+
     async def init_indexes(self) -> None:
         """Create clean, conflict-proof indexes."""
         # 1. Media collection
@@ -165,5 +169,89 @@ class Database:
         await self.settings.update_one(
             {"_id": "app_settings"},
             {"$set": data},
+            upsert=True,
+        )
+
+    async def get_custom_catalogs(self, visible_only: bool = False) -> List[Dict[str, Any]]:
+        query = {"visible": True} if visible_only else {}
+        cursor = self.custom_catalogs.find(query).sort("updated_at", DESCENDING)
+        catalogs = []
+        async for doc in cursor:
+            doc["_id"] = str(doc["_id"])
+            catalogs.append(doc)
+        return catalogs
+
+    async def get_custom_catalog(self, catalog_id: str) -> Optional[Dict[str, Any]]:
+        from bson import ObjectId
+        try:
+            doc = await self.custom_catalogs.find_one({"_id": ObjectId(catalog_id)})
+            if doc:
+                doc["_id"] = str(doc["_id"])
+                return doc
+        except Exception:
+            pass
+        return None
+
+    async def create_custom_catalog(self, name: str, visibility: str = "public", allowed_tokens: Optional[List[str]] = None) -> str:
+        doc = {
+            "name": name.strip(),
+            "visibility": visibility,
+            "allowed_tokens": allowed_tokens or [],
+            "visible": visibility != "owner",
+            "exclusive": False,
+            "searchable": False,
+            "items": [],
+            "created_at": time.time(),
+            "updated_at": time.time(),
+        }
+        res = await self.custom_catalogs.insert_one(doc)
+        return str(res.inserted_id)
+
+    async def update_custom_catalog(self, catalog_id: str, **kwargs) -> bool:
+        from bson import ObjectId
+        kwargs["updated_at"] = time.time()
+        if "visibility" in kwargs:
+            kwargs["visible"] = kwargs["visibility"] != "owner"
+        res = await self.custom_catalogs.update_one({"_id": ObjectId(catalog_id)}, {"$set": kwargs})
+        return res.modified_count > 0
+
+    async def delete_custom_catalog(self, catalog_id: str) -> bool:
+        from bson import ObjectId
+        res = await self.custom_catalogs.delete_one({"_id": ObjectId(catalog_id)})
+        return res.deleted_count > 0
+
+    async def add_item_to_custom_catalog(self, catalog_id: str, item: Dict[str, Any]) -> bool:
+        from bson import ObjectId
+        res = await self.custom_catalogs.update_one(
+            {
+                "_id": ObjectId(catalog_id),
+                "items": {"$not": {"$elemMatch": {"tmdb_id": item["tmdb_id"], "media_type": item["media_type"]}}},
+            },
+            {
+                "$push": {"items": {"$each": [item], "$position": 0}},
+                "$set": {"updated_at": time.time()},
+            },
+        )
+        return res.modified_count > 0
+
+    async def remove_item_from_custom_catalog(self, catalog_id: str, tmdb_id: int, media_type: str) -> bool:
+        from bson import ObjectId
+        res = await self.custom_catalogs.update_one(
+            {"_id": ObjectId(catalog_id)},
+            {
+                "$pull": {"items": {"tmdb_id": tmdb_id, "media_type": media_type}},
+                "$set": {"updated_at": time.time()},
+            },
+        )
+        return res.modified_count > 0
+
+    async def get_catalog_order(self) -> List[str]:
+        doc = await self.db["state"].find_one({"_id": "catalog_order"})
+        return (doc.get("order") if doc else []) or []
+
+    async def save_catalog_order(self, order: List[str]) -> None:
+        await self.db["state"].update_one(
+            {"_id": "catalog_order"},
+            {"$set": {"order": order, "updated_at": time.time()}},
             upsert=True,
         )

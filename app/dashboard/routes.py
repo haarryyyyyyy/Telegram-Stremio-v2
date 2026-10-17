@@ -1357,21 +1357,266 @@ async def export_backup(request: Request):
     }
 
 
+from app.indexer.auto_catalog import (
+    get_auto_catalog_settings,
+    update_auto_catalog_settings,
+    get_auto_catalog_sync_status,
+    start_auto_catalog_sync_background,
+)
+
+_DEFAULT_CATALOG_ENTRIES = [
+    {"id": "spotlight", "name": "🌟 15m Spotlight", "group": "Default Movies", "type": "movie"},
+    {"id": "recent", "name": "🆕 Recently Added", "group": "Default Movies", "type": "movie"},
+    {"id": "recommended", "name": "🎬 Recommended", "group": "Default Movies", "type": "movie"},
+    {"id": "spotlight", "name": "🌟 15m TV & Anime", "group": "Default TV", "type": "series"},
+    {"id": "recent", "name": "🆕 Recent TV & Anime", "group": "Default TV", "type": "series"},
+]
+
+
 @dashboard_router.get("/api/custom-catalogs")
-async def get_custom_catalogs():
-    return []
+async def get_custom_catalogs(
+    request: Request,
+    tmdb_id: Optional[int] = None,
+    media_type: Optional[str] = None,
+):
+    db: Database = request.app.state.db
+    catalogs = await db.get_custom_catalogs()
+    if tmdb_id is not None and media_type:
+        norm_type = "series" if media_type in ("tv", "series", "anime") else "movie"
+        for c in catalogs:
+            c["contains_current"] = any(
+                int(it.get("tmdb_id", -1)) == int(tmdb_id)
+                and it.get("media_type") == norm_type
+                for it in c.get("items", []) or []
+            )
+    return {"catalogs": catalogs}
+
+
+@dashboard_router.post("/api/custom-catalogs")
+async def create_custom_catalog(request: Request, payload: dict):
+    db: Database = request.app.state.db
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Catalog name is required")
+    visibility = payload.get("visibility") or "public"
+    allowed_tokens = payload.get("allowed_tokens") or []
+    cat_id = await db.create_custom_catalog(name=name, visibility=visibility, allowed_tokens=allowed_tokens)
+    catalog = await db.get_custom_catalog(cat_id)
+    return {"message": "Catalog created successfully", "catalog": catalog}
+
+
+@dashboard_router.put("/api/custom-catalogs/{catalog_id}")
+async def update_custom_catalog(request: Request, catalog_id: str, payload: dict):
+    db: Database = request.app.state.db
+    name = payload.get("name")
+    visibility = payload.get("visibility")
+    allowed_tokens = payload.get("allowed_tokens")
+    exclusive = payload.get("exclusive")
+    searchable = payload.get("searchable")
+
+    update_fields: dict = {}
+    if name is not None:
+        update_fields["name"] = name.strip()
+    if visibility is not None:
+        update_fields["visibility"] = visibility
+    if allowed_tokens is not None:
+        update_fields["allowed_tokens"] = allowed_tokens
+    if exclusive is not None:
+        update_fields["exclusive"] = bool(exclusive)
+    if searchable is not None:
+        update_fields["searchable"] = bool(searchable)
+
+    await db.update_custom_catalog(catalog_id, **update_fields)
+    catalog = await db.get_custom_catalog(catalog_id)
+    return {"message": "Catalog updated", "catalog": catalog}
+
+
+@dashboard_router.delete("/api/custom-catalogs/{catalog_id}")
+async def delete_custom_catalog(request: Request, catalog_id: str):
+    db: Database = request.app.state.db
+    await db.delete_custom_catalog(catalog_id)
+    return {"message": "Catalog deleted successfully"}
 
 
 @dashboard_router.get("/api/custom-catalogs/auto-sync/settings")
-async def get_custom_catalogs_sync_settings():
-    return {"enabled": False}
+async def get_custom_catalogs_sync_settings(request: Request):
+    db: Database = request.app.state.db
+    return {"settings": await get_auto_catalog_settings(db)}
+
+
+@dashboard_router.put("/api/custom-catalogs/auto-sync/settings")
+async def update_custom_catalogs_sync_settings(request: Request, payload: dict):
+    db: Database = request.app.state.db
+    enabled_keys = payload.get("enabled_keys", [])
+    if not isinstance(enabled_keys, list):
+        raise HTTPException(status_code=400, detail="enabled_keys must be a list")
+    settings_res = await update_auto_catalog_settings(db, enabled_keys)
+    return {"message": "Settings saved", "settings": settings_res}
+
+
+@dashboard_router.post("/api/custom-catalogs/auto-sync")
+async def run_custom_catalogs_auto_sync(request: Request, force_refresh: bool = False):
+    db: Database = request.app.state.db
+    app_settings = await db.get_settings() or {}
+    tmdb_key = app_settings.get("tmdb_api_key") or getattr(request.app.state, "tmdb_api_key", None)
+    res = start_auto_catalog_sync_background(db, tmdb_api_key=tmdb_key, force_refresh=force_refresh)
+    return {"message": res.get("message", "Auto sync started"), "result": res}
 
 
 @dashboard_router.get("/api/custom-catalogs/auto-sync/status")
-async def get_custom_catalogs_sync_status():
-    return {"status": "idle", "scanned": 0, "classified": 0}
+async def get_custom_catalogs_sync_status(request: Request):
+    db: Database = request.app.state.db
+    return {"status": await get_auto_catalog_sync_status(db)}
 
 
 @dashboard_router.get("/api/custom-catalogs-order")
-async def get_custom_catalogs_order():
-    return []
+async def get_custom_catalogs_order(request: Request):
+    db: Database = request.app.state.db
+    catalogs = await db.get_custom_catalogs()
+    entries = [dict(e) for e in _DEFAULT_CATALOG_ENTRIES]
+    for c in catalogs:
+        items = c.get("items") or []
+        cid = f"custom_{c['_id']}"
+        name = c.get("name") or "Catalog"
+        group = "Auto" if c.get("auto") else "Custom"
+        has_movie = any(it.get("media_type") == "movie" for it in items)
+        has_series = any(it.get("media_type") in ("tv", "series") for it in items)
+        if has_movie or not items:
+            entries.append({"id": cid, "name": name, "group": group, "type": "movie"})
+        if has_series:
+            entries.append({"id": cid, "name": name, "group": group, "type": "series"})
+
+    for e in entries:
+        e["key"] = f"{e['id']}::{e['type']}"
+    order = await db.get_catalog_order()
+    rank = {k: i for i, k in enumerate(order)}
+    entries.sort(key=lambda e: rank.get(e["key"], rank.get(e["id"], len(order) + 1)))
+    return {"entries": entries, "order": order}
+
+
+@dashboard_router.put("/api/custom-catalogs-order")
+async def update_custom_catalogs_order(request: Request, payload: dict):
+    db: Database = request.app.state.db
+    order = payload.get("order")
+    if not isinstance(order, list):
+        raise HTTPException(status_code=400, detail="order must be a list")
+    await db.save_catalog_order(order)
+    return {"ok": True, "message": "Catalog order saved"}
+
+
+@dashboard_router.get("/api/custom-catalogs/search-media")
+async def search_custom_catalog_media(
+    request: Request,
+    query: str,
+    media_type: str = "movie",
+    page: int = 1,
+    page_size: int = 12,
+):
+    db: Database = request.app.state.db
+    q = (query or "").strip().lower()
+    if not q:
+        return {"results": [], "total_count": 0}
+
+    norm_type = "series" if media_type in ("tv", "series") else "movie"
+    cursor = db.media.find({"$or": [{"title": {"$regex": q, "$options": "i"}}, {"matched_alias": {"$regex": q, "$options": "i"}}]})
+    all_matched = await cursor.to_list(length=100)
+    filtered = [
+        {
+            "tmdb_id": it.get("tmdb_id"),
+            "title": it.get("title"),
+            "poster": it.get("poster_url"),
+            "release_year": it.get("year"),
+            "media_type": "tv" if it.get("media_type") in ("tv", "series", "anime") else "movie",
+            "genres": it.get("genres") or [],
+        }
+        for it in all_matched
+        if (norm_type == "series" and it.get("media_type") in ("tv", "series", "anime"))
+        or (norm_type == "movie" and it.get("media_type") == "movie")
+    ]
+    # deduplicate by tmdb_id
+    seen = set()
+    deduped = []
+    for f in filtered:
+        if f["tmdb_id"] not in seen:
+            seen.add(f["tmdb_id"])
+            deduped.append(f)
+
+    start = (page - 1) * page_size
+    return {"results": deduped[start:start + page_size], "total_count": len(deduped)}
+
+
+@dashboard_router.get("/api/custom-catalogs/{catalog_id}/items")
+async def get_custom_catalog_items(
+    request: Request,
+    catalog_id: str,
+    media_type: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 24,
+):
+    db: Database = request.app.state.db
+    catalog = await db.get_custom_catalog(catalog_id)
+    if not catalog:
+        raise HTTPException(status_code=404, detail="Catalog not found")
+    items = catalog.get("items") or []
+    if media_type:
+        norm = "series" if media_type in ("tv", "series") else "movie"
+        items = [it for it in items if it.get("media_type") == norm]
+    start = (page - 1) * page_size
+    slice_items = items[start:start + page_size]
+    # hydrate items
+    hydrated = []
+    for it in slice_items:
+        hydrated.append({
+            "tmdb_id": it.get("tmdb_id"),
+            "title": it.get("title") or f"TMDb {it.get('tmdb_id')}",
+            "poster": it.get("poster") or it.get("poster_url"),
+            "release_year": it.get("year"),
+            "media_type": "tv" if it.get("media_type") in ("tv", "series") else "movie",
+        })
+    total_pages = (len(items) + page_size - 1) // page_size if items else 0
+    return {
+        "catalog": catalog,
+        "items": hydrated,
+        "total_count": len(items),
+        "current_page": page,
+        "total_pages": total_pages,
+    }
+
+
+@dashboard_router.post("/api/custom-catalogs/{catalog_id}/items")
+async def add_item_to_custom_catalog(request: Request, catalog_id: str, payload: dict):
+    db: Database = request.app.state.db
+    tmdb_id = payload.get("tmdb_id")
+    media_type = payload.get("media_type", "movie")
+    if not tmdb_id:
+        raise HTTPException(status_code=400, detail="tmdb_id is required")
+
+    media_doc = None
+    if hasattr(db, "media") and db.media:
+        media_doc = await db.media.find_one({"tmdb_id": int(tmdb_id)})
+    norm_type = "series" if media_type in ("tv", "series") else "movie"
+    item = {
+        "tmdb_id": int(tmdb_id),
+        "media_type": norm_type,
+        "title": (media_doc.get("title") if media_doc else payload.get("title")) or f"TMDb {tmdb_id}",
+        "poster": (media_doc.get("poster_url") if media_doc else payload.get("poster")),
+        "year": (media_doc.get("year") if media_doc else payload.get("year")),
+        "added_at": time.time(),
+        "visibility": "public",
+        "allowed_tokens": [],
+    }
+    added = await db.add_item_to_custom_catalog(catalog_id, item)
+    return {"message": "Added to catalog" if added else "Already in catalog", "added": added}
+
+
+@dashboard_router.delete("/api/custom-catalogs/{catalog_id}/items")
+async def remove_item_from_custom_catalog(
+    request: Request,
+    catalog_id: str,
+    tmdb_id: int,
+    media_type: str = "movie",
+):
+    db: Database = request.app.state.db
+    norm_type = "series" if media_type in ("tv", "series") else "movie"
+    removed = await db.remove_item_from_custom_catalog(catalog_id, int(tmdb_id), norm_type)
+    return {"message": "Removed from catalog" if removed else "Item not found", "removed": removed}
