@@ -1337,35 +1337,53 @@ async def admin_restart(request: Request, target: str = "all"):
     """
     Updates code from git origin and triggers process restart for systemd/Docker.
     """
+    import shutil
+    git_bin = shutil.which("git")
     repo_dir = Path(__file__).resolve().parent.parent.parent
+    if not (repo_dir / ".git").exists():
+        # Fallback to current working directory
+        cwd_candidate = Path.cwd()
+        if (cwd_candidate / ".git").exists():
+            repo_dir = cwd_candidate
+
     git_output = ""
     success = True
 
     if target.lower() in ("all", "update"):
-        try:
-            # Detect whether master or main branch
-            branch_proc = await asyncio.create_subprocess_exec(
-                "git", "rev-parse", "--abbrev-ref", "HEAD",
-                cwd=str(repo_dir),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            b_out, _ = await branch_proc.communicate()
-            branch = b_out.decode("utf-8").strip() or "master"
-
-            cmd = ["git", "pull", "origin", branch]
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                cwd=str(repo_dir),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await proc.communicate()
-            git_output = stdout.decode("utf-8", errors="replace") + stderr.decode("utf-8", errors="replace")
-            success = proc.returncode == 0
-        except Exception as e:
-            git_output = f"Git pull error: {e}"
+        if not git_bin:
+            git_output = "Git executable not found in system PATH."
             success = False
+        elif not repo_dir.exists():
+            git_output = f"Repository directory not found: {repo_dir}"
+            success = False
+        else:
+            try:
+                # Detect whether master or main branch
+                branch_proc = await asyncio.create_subprocess_exec(
+                    git_bin, "rev-parse", "--abbrev-ref", "HEAD",
+                    cwd=str(repo_dir),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                b_out, _ = await branch_proc.communicate()
+                branch = b_out.decode("utf-8").strip() or "master"
+
+                cmd = [git_bin, "pull", "origin", branch]
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    cwd=str(repo_dir),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await proc.communicate()
+                git_output = stdout.decode("utf-8", errors="replace") + stderr.decode("utf-8", errors="replace")
+                success = proc.returncode == 0
+            except FileNotFoundError as fnf:
+                git_output = f"Command failed: {fnf}"
+                success = False
+            except Exception as e:
+                git_output = f"Git error: {e}"
+                success = False
 
     async def _delayed_exit():
         await asyncio.sleep(1.0)
