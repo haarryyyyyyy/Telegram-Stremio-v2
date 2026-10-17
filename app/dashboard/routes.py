@@ -169,6 +169,9 @@ async def get_base_context(request: Request, **extra) -> Dict[str, Any]:
         "tmdb_id": 0,
         "db_index": 0,
         "media_details": {},
+        "cluster_nodes": [],
+        "userbot_configured": False,
+        "multi_token_available": True,
     }
     ctx.update(extra)
     return ctx

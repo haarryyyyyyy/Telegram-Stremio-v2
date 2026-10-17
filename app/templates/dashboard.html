@@ -65,6 +65,8 @@
         </div>
     </div>
 
+
+
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 min-w-0">
         <div class="lg:col-span-2 space-y-8 min-w-0">
             <style>
@@ -229,7 +231,7 @@
                 </div>
                 <div class="min-w-0">
                     <h4 class="font-bold text-text truncate">Tokens &amp; Access</h4>
-                    <p class="text-xs text-text-secondary truncate">Create tokens, set data limits, and manage subscriptions</p>
+                    <p class="text-xs text-text-secondary truncate">Create tokens and manage data limits</p>
                 </div>
                 <i class="fa-solid fa-chevron-right ml-auto text-muted group-hover:text-primary group-hover:translate-x-1 transition-all flex-shrink-0"></i>
             </a>
@@ -297,12 +299,21 @@
                                             {% if stream.file_name and stream.file_name != (stream.title or stream.meta.get('title')) %}
                                             <p class="text-[10px] text-text-secondary truncate leading-tight" title="{{ stream.file_name }}">{{ stream.file_name }}</p>
                                             {% endif %}
-                                            <div class="mt-1 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-widest text-text-secondary min-w-0">
-                                                <span class="whitespace-nowrap">Bot {{ (stream.client_index or 0) + 1 }}</span>
-                                                <span>•</span>
-                                                <span class="whitespace-nowrap">DC {{ stream.dc_id or '-' }}</span>
-                                                <span>•</span>
-                                                <span class="font-mono truncate max-w-[120px]">{{ stream.stream_id[:12] if stream.stream_id else 'Unknown' }}{% if stream.stream_id %}…{% endif %}</span>
+                                            <div class="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] uppercase tracking-wider min-w-0">
+                                                <span class="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
+                                                    <i class="fa-solid fa-server text-[9px]"></i> {{ stream.node_name or 'Server' }}
+                                                </span>
+                                                <span class="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                                    <i class="fa-solid fa-robot text-[9px]"></i> Bot {{ (stream.client_index or 0) + 1 }}
+                                                </span>
+                                                {% if stream.user_name or stream.meta.get('user_name') %}
+                                                <span class="inline-flex items-center gap-1 font-semibold px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                                                    <i class="fa-solid fa-user text-[9px]"></i> {{ stream.user_name or stream.meta.get('user_name') }}
+                                                </span>
+                                                {% endif %}
+                                                <span class="text-text-secondary">DC {{ stream.dc_id or '-' }}</span>
+                                                <span class="text-text-secondary">•</span>
+                                                <span class="font-mono text-text-secondary truncate max-w-[100px]">{{ stream.stream_id[:12] if stream.stream_id else 'Unknown' }}{% if stream.stream_id %}…{% endif %}</span>
                                             </div>
                                         </div>
                                         <span class="text-[10px] font-bold px-2 py-1 rounded-lg uppercase whitespace-nowrap stream-badge-live flex-shrink-0">
@@ -474,7 +485,10 @@
         const title = escapeHtml(getStreamTitle(stream));
         const fileName = escapeHtml(getStreamFileName(stream));
         const streamId = escapeHtml(stream?.stream_id ? String(stream.stream_id).slice(0, 12) + '…' : 'Unknown');
-        const label = escapeHtml(getClientLabel(stream));
+        const nodeName = escapeHtml(stream?.node_name || stream?.meta?.node_name || 'Server');
+        const botName = 'Bot ' + ((stream?.client_index ?? 0) + 1);
+        const userName = escapeHtml(stream?.user_name || stream?.meta?.user_name || '');
+        const dcId = escapeHtml(String(stream?.dc_id || '-'));
         const totalBytes = formatBytes(stream?.total_bytes || 0);
         const avgSpeed = stream?.avg_mbps !== null && stream?.avg_mbps !== undefined
             ? Number(stream.avg_mbps).toFixed(3) + ' MB/s' : '—';
@@ -486,10 +500,20 @@
                     <div class="min-w-0 flex-1 pr-2">
                         <h5 class="font-bold text-sm text-text truncate" title="${title}">${title}</h5>
                         ${fileName ? `<p class="text-[10px] text-text-secondary truncate leading-tight" title="${fileName}">${fileName}</p>` : ''}
-                        <div class="mt-1 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-widest text-text-secondary min-w-0">
-                            <span class="whitespace-nowrap">${label}</span>
-                            <span>•</span>
-                            <span class="font-mono truncate max-w-[120px]">${streamId}</span>
+                        <div class="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] uppercase tracking-wider min-w-0">
+                            <span class="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
+                                <i class="fa-solid fa-server text-[9px]"></i> ${nodeName}
+                            </span>
+                            <span class="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                <i class="fa-solid fa-robot text-[9px]"></i> ${botName}
+                            </span>
+                            ${userName ? `
+                            <span class="inline-flex items-center gap-1 font-semibold px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                                <i class="fa-solid fa-user text-[9px]"></i> ${userName}
+                            </span>` : ''}
+                            <span class="text-text-secondary">DC ${dcId}</span>
+                            <span class="text-text-secondary">•</span>
+                            <span class="font-mono text-text-secondary truncate max-w-[100px]">${streamId}</span>
                         </div>
                     </div>
                     <span class="text-[10px] font-bold px-2 py-1 rounded-lg uppercase whitespace-nowrap flex-shrink-0 ${status.className}">
@@ -601,6 +625,10 @@
 
                 const elVersion = document.getElementById('sys-version');
                 if (elVersion) elVersion.innerText = 'v' + (stats.version || '1.0.0');
+
+                if (stats.cluster_nodes) {
+                    renderClusterNodes(stats.cluster_nodes, stats.node_name);
+                }
             }
 
             await loadStreamStats();
@@ -612,11 +640,93 @@
         }
     }
 
+    function renderClusterNodes(nodes, currentNode) {
+        const grid = document.getElementById('cluster-nodes-grid');
+        if (!grid) return;
+        if (!nodes || !nodes.length) {
+            grid.innerHTML = '<div class="col-span-full p-6 text-center text-text-secondary text-sm">No cluster nodes registered yet.</div>';
+            return;
+        }
+        grid.innerHTML = nodes.map(node => {
+            const isOnline = !!node.is_online;
+            const isCurrent = node.node_name === currentNode;
+            const statusColor = isOnline ? 'text-green-400' : 'text-red-400';
+            const iconBg = isOnline ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400';
+            const roleLabel = node.ingest_enabled ? 'Ingest & Stream' : 'Streamer';
+            const roleBg = node.ingest_enabled ? 'bg-accent/20 text-accent' : 'bg-surface text-text-secondary';
+            const statusText = isOnline ? 'Online' : 'Offline';
+            const timeText = isOnline ? `Uptime: <span class="text-text font-medium">${node.uptime_str || 'Active'}</span>` : `Last seen: <span class="text-text-secondary">${node.last_seen_str || 'Recently'}</span>`;
+            const pulse = isOnline
+                ? '<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>'
+                : '<span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>';
+            const hbText = isOnline ? `Live (${node.seconds_ago}s ago)` : `Lost (${node.seconds_ago}s ago)`;
+
+            return `
+                <div class="p-4 rounded-2xl border border-hairline bg-surface/40 hover:bg-surface/70 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="flex items-center gap-3.5">
+                        <div class="relative flex-shrink-0">
+                            <div class="w-11 h-11 rounded-xl ${iconBg} flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-server"></i>
+                            </div>
+                            <span class="absolute -top-1 -right-1 flex h-3 w-3">
+                                ${pulse}
+                            </span>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-bold text-base text-text">${escapeHtmlSetup(node.node_name)}</span>
+                                ${isCurrent ? '<span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-primary/20 text-primary uppercase">You</span>' : ''}
+                                <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded ${roleBg} uppercase">${roleLabel}</span>
+                            </div>
+                            <p class="text-xs text-text-secondary mt-0.5">
+                                <span class="${statusColor} font-semibold">${statusText}</span> • ${timeText}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-hairline flex-shrink-0">
+                        <div class="text-left sm:text-right">
+                            <span class="text-[10px] uppercase font-bold text-text-secondary block">Heartbeat</span>
+                            <span class="text-xs font-bold ${statusColor}">${hbText}</span>
+                        </div>
+                        <button onclick="restartClusterNode('${escapeHtmlSetup(node.node_name)}')" title="Update and restart ${escapeHtmlSetup(node.node_name)}" class="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-surface hover:bg-surface-hover border border-hairline text-text-secondary hover:text-text transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-power-off text-[10px]"></i>
+                            <span>Restart</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async function restartClusterNode(target = 'all') {
+        const isAll = target === 'all';
+        const confirmMsg = isAll
+            ? 'Update & restart server? It will pull the latest code from GitHub and restart.'
+            : `Restart server? It will pull the latest code and restart.`;
+        if (!confirm(confirmMsg)) return;
+
+        try {
+            showToast('Dispatching restart command to cluster...', 'info', 'Cluster Restart');
+            const res = await fetch(`/api/admin/restart?target=${encodeURIComponent(target)}`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(data.message || 'Restart initiated.', 'success', 'Restart Dispatched');
+                setTimeout(refreshDashboard, 3000);
+            } else {
+                showToast(data.detail || 'Restart request failed.', 'error', 'Error');
+            }
+        } catch (e) {
+            showToast('Network error while requesting restart.', 'error', 'Error');
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         loadStreamStats();
         loadSetupStatus();
         setInterval(loadStreamStats, 30000);
         setInterval(refreshLiveDurations, 1000);
+        setInterval(refreshDashboard, 15000);
     });
 
     async function loadSetupStatus() {
