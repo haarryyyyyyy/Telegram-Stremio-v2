@@ -1364,11 +1364,19 @@ async def admin_restart(request: Request, target: str = "all"):
         if not git_bin:
             git_output = "Git executable not found in system PATH."
             success = False
-        elif not repo_dir.exists():
-            git_output = f"Repository directory not found: {repo_dir}"
-            success = False
         else:
             try:
+                # If .git is missing (e.g. inside a fresh Docker container), initialize it
+                if not (repo_dir / ".git").exists():
+                    upstream_url = "https://github.com/haarryyyyyyy/Telegram-Stremio-v2.git"
+                    init_proc = await asyncio.create_subprocess_shell(
+                        f"git init -q && git remote add origin {upstream_url} && git fetch origin master --depth=1 -q && git checkout -b master origin/master -f -q",
+                        cwd=str(repo_dir),
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    await init_proc.communicate()
+
                 # Detect whether master or main branch
                 branch_proc = await asyncio.create_subprocess_exec(
                     git_bin, "rev-parse", "--abbrev-ref", "HEAD",
@@ -1377,11 +1385,14 @@ async def admin_restart(request: Request, target: str = "all"):
                     stderr=asyncio.subprocess.PIPE,
                 )
                 b_out, _ = await branch_proc.communicate()
-                branch = b_out.decode("utf-8").strip() or "master"
+                branch = b_out.decode("utf-8").strip()
+                if not branch or "HEAD" in branch:
+                    branch = "master"
 
-                cmd = [git_bin, "pull", "origin", branch]
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
+                # Pull latest changes
+                pull_cmd = f"git fetch origin {branch} && git reset --hard origin/{branch}"
+                proc = await asyncio.create_subprocess_shell(
+                    pull_cmd,
                     cwd=str(repo_dir),
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
