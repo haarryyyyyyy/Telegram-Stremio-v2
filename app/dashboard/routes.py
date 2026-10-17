@@ -1,3 +1,4 @@
+import time
 import secrets
 import aiohttp
 from typing import Optional, List, Dict, Any
@@ -287,11 +288,59 @@ async def reindex_status(request: Request):
     return reindexer.get_progress()
 
 
+def format_uptime(seconds: float) -> str:
+    total = int(max(0, seconds))
+    days = total // 86400
+    hours = (total % 86400) // 3600
+    minutes = (total % 3600) // 60
+    if days > 0:
+        return f"{days}d {hours}h {minutes}m"
+    if hours > 0:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
+
+
 @dashboard_router.get("/api/stats")
 async def get_stats(request: Request):
     db = getattr(request.app.state, "db", None)
+    bot_pool = getattr(request.app.state, "bot_pool", None)
+    tracker = getattr(request.app.state, "stream_tracker", None)
+    start_time = getattr(request.app.state, "start_time", time.time())
+
+    stream_stats = tracker.get_stats() if tracker else {"total_active_streams": 0, "active_streams": [], "recent_streams": []}
+    uptime_str = format_uptime(time.time() - start_time)
+
+    connected_bots = 0
+    if bot_pool and hasattr(bot_pool, "get_tokens"):
+        tokens = bot_pool.get_tokens()
+        if hasattr(tokens, "__await__"):
+            tokens = await tokens
+        connected_bots = len(tokens)
+
     if not db:
-        return {"total_media": 0, "unmatched": 0}
+        return {
+            "uptime": uptime_str,
+            "connected_bots": connected_bots,
+            "total_active_streams": stream_stats["total_active_streams"],
+            "version": "2.0.0",
+            "node_name": "VM 1 (Oracle)",
+            "total_media": 0,
+            "movies": 0,
+            "series": 0,
+            "unmatched": 0,
+            "tokens_count": 0,
+            "databases": [],
+            "cluster_nodes": [
+                {
+                    "node_name": "VM 1 (Oracle)",
+                    "is_online": True,
+                    "ingest_enabled": True,
+                    "uptime_str": uptime_str,
+                    "seconds_ago": 1,
+                }
+            ],
+            "active_streams": stream_stats["active_streams"],
+        }
 
     total_media = await db.media.count_documents({})
     movies = await db.media.count_documents({"media_type": "movie"})
@@ -299,13 +348,92 @@ async def get_stats(request: Request):
     unmatched = await db.unmatched_queue.count_documents({})
     tokens_count = await db.tokens.count_documents({})
 
+    cluster_nodes = [
+        {
+            "node_name": "VM 1 (Oracle)",
+            "is_online": True,
+            "ingest_enabled": True,
+            "uptime_str": uptime_str,
+            "seconds_ago": 1,
+        }
+    ]
+
+    databases = [
+        {
+            "db_name": "MongoDB (Atlas)",
+            "movie_count": movies,
+            "tv_count": series,
+            "storageSize": max(1024 * 1024, total_media * 350 * 1024),
+        }
+    ]
+
     return {
+        "uptime": uptime_str,
+        "connected_bots": connected_bots,
+        "total_active_streams": stream_stats["total_active_streams"],
+        "version": "2.0.0",
+        "node_name": "VM 1 (Oracle)",
         "total_media": total_media,
         "movies": movies,
         "series": series,
         "unmatched": unmatched,
         "tokens_count": tokens_count,
+        "databases": databases,
+        "cluster_nodes": cluster_nodes,
+        "active_streams": stream_stats["active_streams"],
     }
+
+
+@dashboard_router.get("/api/streams")
+async def get_streams_endpoint(request: Request):
+    tracker = getattr(request.app.state, "stream_tracker", None)
+    if not tracker:
+        return {"total_active_streams": 0, "active_streams": [], "recent_streams": []}
+    return tracker.get_stats()
+
+
+@dashboard_router.get("/api/media")
+async def list_media_endpoint(
+    request: Request,
+    media_type: Optional[str] = None,
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+):
+    db = getattr(request.app.state, "db", None)
+    if not db:
+        return {"items": [], "total": 0}
+
+    query = {}
+    if media_type and media_type in ("movie", "tv"):
+        query["media_type"] = media_type
+    if search:
+        query["title"] = {"$regex": search, "$options": "i"}
+
+    total = await db.media.count_documents(query)
+    cursor = db.media.find(query).sort("_id", -1).skip(skip).limit(limit)
+    items = []
+    async for doc in cursor:
+        doc_copy = dict(doc)
+        doc_copy["id"] = str(doc_copy.get("_id", ""))
+        doc_copy.pop("_id", None)
+        items.append(doc_copy)
+
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
+@dashboard_router.delete("/api/media/{media_id}")
+async def delete_media_endpoint(media_id: str, request: Request):
+    db = getattr(request.app.state, "db", None)
+    if not db:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    from bson import ObjectId
+    try:
+        oid = ObjectId(media_id)
+        res = await db.media.delete_one({"_id": oid})
+    except Exception:
+        res = await db.media.delete_one({"id": media_id})
+    return {"deleted": res.deleted_count > 0}
 
 
 @dashboard_router.get("/api/tokens")

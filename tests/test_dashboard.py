@@ -89,3 +89,61 @@ async def test_reindex_endpoints(mock_app):
         assert status_resp.status_code == 200
         assert status_resp.json()["status"] == "running"
         assert status_resp.json()["scanned"] == 42
+
+
+@pytest.mark.asyncio
+async def test_dashboard_page_render(mock_app):
+    transport = ASGITransport(app=mock_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/admin")
+        assert resp.status_code == 200
+        assert "TG Stremio" in resp.text
+        assert "System Overview" in resp.text
+        assert "Cluster VM Nodes" in resp.text
+        assert "Live Network" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_get_stats_enhanced(mock_app):
+    mock_app.state.db.media.count_documents = AsyncMock(side_effect=[120, 80, 40])
+    mock_app.state.db.unmatched_queue.count_documents = AsyncMock(return_value=5)
+    mock_app.state.db.tokens.count_documents = AsyncMock(return_value=2)
+
+    transport = ASGITransport(app=mock_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/admin/api/stats")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "uptime" in data
+        assert "connected_bots" in data
+        assert "total_active_streams" in data
+        assert "cluster_nodes" in data
+        assert "databases" in data
+        assert data["total_media"] == 120
+        assert data["movies"] == 80
+        assert data["series"] == 40
+        assert data["unmatched"] == 5
+
+
+@pytest.mark.asyncio
+async def test_streams_endpoint(mock_app):
+    from app.streamer.tracker import StreamTracker
+    tracker = StreamTracker()
+    tracker.start_stream(
+        stream_id="st_test1",
+        file_id="fid_123",
+        title="Test Movie",
+        file_name="Test.Movie.mkv",
+        file_size=104857600,
+        ip="192.168.1.100"
+    )
+    mock_app.state.stream_tracker = tracker
+
+    transport = ASGITransport(app=mock_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/admin/api/streams")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_active_streams"] == 1
+        assert len(data["active_streams"]) == 1
+        assert data["active_streams"][0]["title"] == "Test Movie"

@@ -1,3 +1,4 @@
+import secrets
 from typing import Optional
 from urllib.parse import quote
 from fastapi import APIRouter, Request, HTTPException, Header, Response
@@ -222,6 +223,35 @@ async def stream_video_file(
     if request.method == "HEAD":
         return Response(status_code=206, headers=headers)
 
+    tracker = getattr(request.app.state, "stream_tracker", None)
+    stream_id = f"st_{secrets.token_hex(4)}"
+    client_ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "127.0.0.1")
+    user_title = record.get("title") if record else filename
+
+    if tracker:
+        tracker.start_stream(
+            stream_id=stream_id,
+            file_id=file_id,
+            title=user_title,
+            file_name=filename,
+            file_size=file_size,
+            ip=client_ip,
+        )
+
     # Use multi-bot chunk multiplexer
     chunk_stream = mux.stream_range(file_id=file_id, start=start, end=end)
-    return StreamingResponse(chunk_stream, status_code=206, headers=headers)
+
+    async def _tracked_stream():
+        try:
+            async for chunk in chunk_stream:
+                if tracker:
+                    tracker.update_bytes(stream_id, len(chunk))
+                yield chunk
+            if tracker:
+                tracker.finish_stream(stream_id, status="completed")
+        except Exception:
+            if tracker:
+                tracker.finish_stream(stream_id, status="cancelled")
+            raise
+
+    return StreamingResponse(_tracked_stream(), status_code=206, headers=headers)

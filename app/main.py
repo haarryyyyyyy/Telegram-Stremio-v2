@@ -12,8 +12,10 @@ from app.indexer.crawler import ChannelCrawler, ReindexManager
 from app.stremio.catalog import CatalogManager
 from app.stremio.routes import stremio_router
 from app.dashboard.routes import dashboard_router
+import time
 from app.streamer.pyro_worker import BotPoolManager
 from app.streamer.multiplexer import StreamMultiplexer
+from app.streamer.tracker import StreamTracker
 
 logging.basicConfig(
     level=logging.INFO,
@@ -108,6 +110,8 @@ def create_app(skip_lifespan_init: bool = False) -> FastAPI:
         app_kwargs["lifespan"] = lifespan
 
     app = FastAPI(**app_kwargs)
+    app.state.stream_tracker = StreamTracker()
+    app.state.start_time = time.time()
 
     # Enable CORS for Stremio desktop and web apps
     app.add_middleware(
@@ -127,6 +131,10 @@ def create_app(skip_lifespan_init: bool = False) -> FastAPI:
     app.include_router(dashboard_router, prefix="/admin")
     app.include_router(dashboard_router, prefix="/dashboard")
     app.include_router(stremio_router)
+
+    from app.dashboard.routes import get_stats, get_streams_endpoint
+    app.add_api_route("/api/system/stats", get_stats, methods=["GET"], include_in_schema=False)
+    app.add_api_route("/stream/stats", get_streams_endpoint, methods=["GET"], include_in_schema=False)
 
     return app
 
