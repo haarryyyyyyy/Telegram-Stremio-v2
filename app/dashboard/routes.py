@@ -485,6 +485,8 @@ async def get_settings_endpoint(request: Request):
 
 @dashboard_router.post("/api/settings")
 @dashboard_router.post("/api/admin/settings")
+@dashboard_router.put("/api/settings")
+@dashboard_router.put("/api/admin/settings")
 async def update_settings_endpoint(request: Request):
     try:
         body = await request.json()
