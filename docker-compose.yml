@@ -7,18 +7,5 @@ services:
       - "8000:8000"
     env_file:
       - .env
-    depends_on:
-      - mongodb
-    mem_limit: 450m
+    mem_limit: 750m
 
-  mongodb:
-    image: mongo:4.4
-    container_name: stremio-mongo-v2
-    restart: unless-stopped
-    volumes:
-      - mongo_data:/data/db
-    ports:
-      - "27017:27017"
-
-volumes:
-  mongo_data:
