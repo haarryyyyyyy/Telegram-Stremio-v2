@@ -1375,11 +1375,21 @@ function formatDuration(seconds) {
     return `${s}s`;
 }
 
-function switchTab(tabId, filter = null) {
-    if (!tabId) tabId = 'overview';
+const TAB_LOADERS = {
+    overview: () => refreshDashboard(),
+    media: (filter) => setMediaFilter(filter),
+    unmatched: () => loadUnmatchedQueue(),
+    bots: () => loadBots(),
+    tools: () => loadTools(),
+    tokens: () => loadTokens(),
+    settings: () => loadSettings(),
+};
+
+function switchTab(tabId, filter = null, pushHistory = true) {
+    if (!tabId || !TAB_LOADERS[tabId]) tabId = 'overview';
     currentTab = tabId;
 
-    // 1. Dual-layer bulletproof DOM visibility toggle (classes + explicit style.display)
+    // 1. Dual-layer bulletproof DOM visibility toggle
     document.querySelectorAll('.tab-pane').forEach(el => {
         el.classList.add('hidden');
         el.style.display = 'none';
@@ -1391,52 +1401,48 @@ function switchTab(tabId, filter = null) {
         target.style.display = 'block';
     }
 
-    // 2. Update active pill indicators on Desktop/Tablet nav
+    // 2. Dismiss mobile drawer if open
+    const mobileMenu = document.getElementById('mobile-menu');
+    if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
+        toggleMobileNav();
+    }
+
+    // 3. Update active pill indicators (desktop nav)
     document.querySelectorAll('.nav-link').forEach(btn => {
         btn.classList.toggle('pill-active', btn.getAttribute('data-tab') === tabId);
     });
 
-    // 3. Update active pill indicators on Mobile bottom bar
+    // 4. Update active pill indicators (mobile bottom bar)
     document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
     });
 
-    // 4. Update active highlight in Mobile drawer menu
+    // 5. Update active highlight in mobile drawer menu
     document.querySelectorAll('.mobile-drawer-btn').forEach(btn => {
         const isActive = btn.getAttribute('data-tab') === tabId;
         btn.classList.toggle('bg-primary/20', isActive);
         btn.classList.toggle('text-primary', isActive);
     });
 
-    // 5. Update browser URL hash for bookmarking and back/forward navigation
-    try {
-        if (window.location.hash !== '#' + tabId) {
-            history.pushState(null, '', '#' + tabId);
-        }
-    } catch (e) {}
+    // 6. Update browser URL cleanly without corrupting history or paths
+    if (pushHistory) {
+        try {
+            const targetHash = '#' + tabId;
+            if (window.location.hash !== targetHash) {
+                history.pushState(null, '', '/admin' + targetHash);
+            }
+        } catch (e) {}
+    }
 
-    // 6. Scroll smoothly to top of view
+    // 7. Scroll smoothly to top of view
     try {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {}
 
-    // 7. Load tab data safely inside try/catch so network errors never freeze the UI
+    // 8. Safely invoke tab loader
     try {
-        if (tabId === 'overview') {
-            refreshDashboard();
-        } else if (tabId === 'media') {
-            setMediaFilter(filter);
-        } else if (tabId === 'unmatched') {
-            loadUnmatchedQueue();
-        } else if (tabId === 'bots') {
-            loadBots();
-        } else if (tabId === 'tools') {
-            loadTools();
-        } else if (tabId === 'tokens') {
-            loadTokens();
-        } else if (tabId === 'settings') {
-            loadSettings();
-        }
+        const loader = TAB_LOADERS[tabId];
+        if (loader) loader(filter);
     } catch (err) {
         console.error('Error loading tab content for ' + tabId + ':', err);
     }
@@ -1455,19 +1461,15 @@ function getTabFromUrl() {
     return 'overview';
 }
 
-window.addEventListener('hashchange', () => {
+const handleUrlTabChange = () => {
     const tab = getTabFromUrl();
     if (tab && tab !== currentTab) {
-        switchTab(tab);
+        switchTab(tab, null, false);
     }
-});
+};
 
-window.addEventListener('popstate', () => {
-    const tab = getTabFromUrl();
-    if (tab && tab !== currentTab) {
-        switchTab(tab);
-    }
-});
+window.addEventListener('hashchange', handleUrlTabChange);
+window.addEventListener('popstate', handleUrlTabChange);
 
 function toggleMobileNav() {
     const menu = document.getElementById('mobile-menu');
@@ -1510,6 +1512,11 @@ async function refreshDashboard() {
             if (navBadge) {
                 navBadge.textContent = String(data.unmatched || 0);
                 navBadge.classList.toggle('hidden', (data.unmatched || 0) === 0);
+            }
+
+            const mobileDot = document.getElementById('mobile-unmatched-dot');
+            if (mobileDot) {
+                mobileDot.classList.toggle('hidden', (data.unmatched || 0) === 0);
             }
 
             const botBadge = document.getElementById('nav-bot-count');
