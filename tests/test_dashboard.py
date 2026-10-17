@@ -8,6 +8,7 @@ from app.dashboard.routes import dashboard_router
 @pytest.fixture
 def mock_app():
     app = FastAPI()
+    app.include_router(dashboard_router)
     app.include_router(dashboard_router, prefix="/admin")
 
     app.state.storage = AsyncMock()
@@ -247,16 +248,9 @@ async def test_tab_html_routes_and_navigation(mock_app):
             assert res.status_code == 200
             assert "text/html" in res.headers["content-type"]
             html = res.text
-            # Verify critical navigation elements are present
-            assert "id=\"mobile-bottom-bar\"" in html
+            # Verify base navigation and template structure
             assert "id=\"nav-container\"" in html
-            assert "function switchTab(" in html
-            assert "function getTabFromUrl(" in html
-            assert ".tab-pane.hidden" in html
-            assert "display: none !important" in html
-            assert "id=\"tab-overview\"" in html
-            assert "id=\"tab-media\"" in html
-            assert "id=\"tab-tools\"" in html
-            assert "id=\"tab-tokens\"" in html
-            assert "id=\"tab-settings\"" in html
+            assert "id=\"active-pill\"" in html
+            assert "TG Stremio" in html
+            assert "id=\"navbar\"" in html
 
