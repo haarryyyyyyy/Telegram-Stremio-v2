@@ -1331,8 +1331,48 @@ async def download_system_logs(request: Request):
 
 
 @dashboard_router.post("/api/admin/restart")
-async def admin_restart():
-    return {"status": "ok", "message": "Server restarted"}
+async def admin_restart(request: Request, target: str = "all"):
+    """
+    Updates code from git origin and triggers process restart for systemd/Docker.
+    """
+    repo_dir = Path(__file__).resolve().parent.parent.parent
+    git_output = ""
+    success = True
+
+    if target.lower() in ("all", "update"):
+        try:
+            # Detect whether master or main branch
+            branch_proc = await asyncio.create_subprocess_exec(
+                "git", "rev-parse", "--abbrev-ref", "HEAD",
+                cwd=str(repo_dir),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            b_out, _ = await branch_proc.communicate()
+            branch = b_out.decode("utf-8").strip() or "master"
+
+            cmd = ["git", "pull", "origin", branch]
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=str(repo_dir),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await proc.communicate()
+            git_output = stdout.decode("utf-8", errors="replace") + stderr.decode("utf-8", errors="replace")
+            success = proc.returncode == 0
+        except Exception as e:
+            git_output = f"Git pull error: {e}"
+            success = False
+
+    async def _delayed_exit():
+        await asyncio.sleep(1.0)
+        os._exit(0)
+
+    asyncio.create_task(_delayed_exit())
+
+    msg = f"Restarting with update ({git_output.strip() or 'Latest'})" if target == "all" else "Server reload initiated."
+    return {"status": "ok", "message": msg, "output": git_output, "success": success}
 
 
 @dashboard_router.get("/api/admin/backup")

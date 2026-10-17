@@ -1931,7 +1931,7 @@ async function restartApp(target = 'all') {
             }
         } catch (e) {
             wasDown = true;
-            msg.textContent = isAll ? 'Cluster nodes updating & restarting — waiting to reconnect…' : 'Server offline — waiting for it to come back…';
+            msg.textContent = isAll ? 'Pulling updates & reloading server — waiting to reconnect…' : 'Server offline — waiting for it to come back…';
         }
     }, 2000);
 }
