@@ -106,14 +106,14 @@ async def get_base_context(request: Request, **extra) -> Dict[str, Any]:
         "default_streaming": saved_settings.get("default_streaming", "bot"),
         "announce_new_content": bool(saved_settings.get("announce_new_content", False)),
         "delete_on_metadata_fail": bool(saved_settings.get("delete_on_metadata_fail", False)),
-        "admin_username": saved_settings.get("admin_username", "admin"),
+        "admin_username": saved_settings.get("admin_username", ""),
         "admin_password_set": bool(saved_settings.get("admin_password")),
         "session_secret_set": bool(saved_settings.get("session_secret")),
-        "tmdb_api": saved_settings.get("tmdb_api") or saved_settings.get("tmdb_api_key") or settings.tmdb_api_key or "",
-        "tvdb_api": saved_settings.get("tvdb_api") or saved_settings.get("tvdb_api_key") or settings.tvdb_api_key or "",
-        "base_url": saved_settings.get("base_url") or settings.base_url or "",
-        "upstream_repo": saved_settings.get("upstream_repo", "haarryyyyyyy/Telegram-Stremio"),
-        "upstream_branch": saved_settings.get("upstream_branch", "master"),
+        "tmdb_api": saved_settings.get("tmdb_api") or saved_settings.get("tmdb_api_key") or "",
+        "tvdb_api": saved_settings.get("tvdb_api") or saved_settings.get("tvdb_api_key") or "",
+        "base_url": saved_settings.get("base_url") or "",
+        "upstream_repo": saved_settings.get("upstream_repo", ""),
+        "upstream_branch": saved_settings.get("upstream_branch", ""),
         "subscription_group_id": saved_settings.get("subscription_group_id", 0),
         "http_proxy_url": saved_settings.get("http_proxy_url", ""),
         "mediaflow_proxy": bool(saved_settings.get("mediaflow_proxy", False)),
@@ -121,10 +121,10 @@ async def get_base_context(request: Request, **extra) -> Dict[str, Any]:
         "cf_stream_url": saved_settings.get("cf_stream_url", ""),
         "cf_stream_secret": saved_settings.get("cf_stream_secret", ""),
         "cf_stream_mode": saved_settings.get("cf_stream_mode", "off"),
-        "auth_channels": channels,
-        "anime_channels": anime_channels,
-        "channel_titles": channel_titles,
-        "approver_ids": approver_ids,
+        "auth_channels": saved_settings.get("channels") or saved_settings.get("auth_channels") or [],
+        "anime_channels": saved_settings.get("anime_channels") or [],
+        "channel_titles": saved_settings.get("channel_titles") or {},
+        "approver_ids": saved_settings.get("approver_ids") or [],
         "stream_formatter": saved_settings.get("stream_formatter", "default"),
         "formatter_name": saved_settings.get("formatter_name", ""),
         "formatter_description": saved_settings.get("formatter_description", ""),
@@ -430,19 +430,19 @@ async def get_settings_endpoint(request: Request):
 
     channels = saved.get("channels") or saved.get("auth_channels") or settings.telegram_channels or []
     defaults = {
-        "tmdb_api": saved.get("tmdb_api") or saved.get("tmdb_api_key") or settings.tmdb_api_key or "",
-        "tmdb_api_key": saved.get("tmdb_api_key") or saved.get("tmdb_api") or settings.tmdb_api_key or "",
-        "tvdb_api": saved.get("tvdb_api") or saved.get("tvdb_api_key") or settings.tvdb_api_key or "",
-        "tvdb_api_key": saved.get("tvdb_api_key") or saved.get("tvdb_api") or settings.tvdb_api_key or "",
-        "channels": channels,
-        "auth_channels": channels,
+        "tmdb_api": saved.get("tmdb_api") or saved.get("tmdb_api_key") or "",
+        "tmdb_api_key": saved.get("tmdb_api_key") or saved.get("tmdb_api") or "",
+        "tvdb_api": saved.get("tvdb_api") or saved.get("tvdb_api_key") or "",
+        "tvdb_api_key": saved.get("tvdb_api_key") or saved.get("tvdb_api") or "",
+        "channels": saved.get("channels") or saved.get("auth_channels") or [],
+        "auth_channels": saved.get("channels") or saved.get("auth_channels") or [],
         "manual_channels": saved.get("manual_channels", []),
         "anime_channels": saved.get("anime_channels", []),
         "channel_titles": saved.get("channel_titles", {}),
         "approver_ids": saved.get("approver_ids", []),
-        "base_url": saved.get("base_url") or settings.base_url or "",
-        "upstream_repo": saved.get("upstream_repo", "haarryyyyyyy/Telegram-Stremio"),
-        "upstream_branch": saved.get("upstream_branch", "master"),
+        "base_url": saved.get("base_url") or "",
+        "upstream_repo": saved.get("upstream_repo", ""),
+        "upstream_branch": saved.get("upstream_branch", ""),
         "replace_mode": saved.get("replace_mode", False),
         "duplicate_protection": saved.get("duplicate_protection", False),
         "hide_catalog": saved.get("hide_catalog", False),
@@ -452,7 +452,7 @@ async def get_settings_endpoint(request: Request):
         "default_streaming": saved.get("default_streaming", "bot"),
         "announce_new_content": saved.get("announce_new_content", False),
         "delete_on_metadata_fail": saved.get("delete_on_metadata_fail", False),
-        "admin_username": saved.get("admin_username", "admin"),
+        "admin_username": saved.get("admin_username", ""),
         "admin_password": "",
         "admin_password_set": bool(saved.get("admin_password")),
         "session_secret": "",
@@ -1330,6 +1330,17 @@ async def download_system_logs(request: Request):
         media_type="text/plain",
         headers={"Content-Disposition": "attachment; filename=server.log"},
     )
+
+
+@dashboard_router.get("/api/admin/version")
+@dashboard_router.get("/api/version")
+async def get_version_endpoint():
+    return {"version": "2.0.0", "status": "ok"}
+
+
+@dashboard_router.get("/api/admin/settings/session")
+async def get_admin_session_status():
+    return {"authenticated": True, "user": "admin", "live": False}
 
 
 @dashboard_router.post("/api/admin/restart")

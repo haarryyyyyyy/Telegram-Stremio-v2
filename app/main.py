@@ -57,19 +57,25 @@ async def lifespan(app: FastAPI):
     # Load persistent settings from DB or seed from .env
     saved_settings = await db.get_settings()
     if not saved_settings:
+        # Filter out obvious placeholder dummy tokens
+        clean_bots = [b for b in settings.telegram_bot_tokens if not b.startswith(("12345678", "09876543", "your_"))]
         saved_settings = {
-            "bot_tokens": settings.telegram_bot_tokens,
-            "tmdb_api_key": settings.tmdb_api_key,
-            "tvdb_api_key": settings.tvdb_api_key,
-            "channels": settings.telegram_channels,
+            "bot_tokens": clean_bots,
+            "tmdb_api_key": "" if settings.tmdb_api_key.startswith("your_") else settings.tmdb_api_key,
+            "tvdb_api_key": "" if settings.tvdb_api_key.startswith("your_") else settings.tvdb_api_key,
+            "channels": [c for c in settings.telegram_channels if str(c) not in ("-1001234567890", "-1009876543210", "@MyMediaChannel")],
             "base_url": settings.base_url,
         }
         await db.save_settings(saved_settings)
 
     active_tmdb_key = saved_settings.get("tmdb_api_key") or settings.tmdb_api_key
+    if active_tmdb_key.startswith("your_"): active_tmdb_key = ""
     active_tvdb_key = saved_settings.get("tvdb_api_key") or settings.tvdb_api_key
-    active_bot_tokens = saved_settings.get("bot_tokens") or settings.telegram_bot_tokens
-    active_channels = saved_settings.get("channels") or settings.telegram_channels
+    if active_tvdb_key.startswith("your_"): active_tvdb_key = ""
+    raw_tokens = saved_settings.get("bot_tokens") if "bot_tokens" in saved_settings else settings.telegram_bot_tokens
+    active_bot_tokens = [b for b in (raw_tokens or []) if not b.startswith(("12345678", "09876543", "your_"))]
+    raw_channels = saved_settings.get("channels") if "channels" in saved_settings else settings.telegram_channels
+    active_channels = [c for c in (raw_channels or []) if str(c) not in ("-1001234567890", "-1009876543210", "@MyMediaChannel")]
 
     # 2. Initialize TMDB/TVDB Resolver & Ingestion Pipeline
     logger.info("Initializing Metadata Resolver & Ingestion Pipeline...")
