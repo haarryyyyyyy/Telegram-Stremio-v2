@@ -23,3 +23,16 @@ async def test_app_routes_and_cors():
         assert manifest_resp.status_code == 200
         manifest_data = manifest_resp.json()
         assert manifest_data["id"] == "community.telegram.stremio.v2"
+
+        # Check legacy redirects to admin tabs
+        for legacy_path, target_tab in [
+            ("/media/manage", "/admin#media"),
+            ("/settings", "/admin#settings"),
+            ("/tools", "/admin#tools"),
+            ("/tokens", "/admin#tokens"),
+            ("/bots", "/admin#bots"),
+        ]:
+            legacy_resp = await client.get(legacy_path, follow_redirects=False)
+            assert legacy_resp.status_code in (307, 308, 302, 301)
+            assert legacy_resp.headers["location"] == target_tab
+

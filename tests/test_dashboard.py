@@ -226,3 +226,37 @@ async def test_system_logs_and_backup(mock_app):
         backup_res = await client.get("/admin/api/backup")
         assert backup_res.status_code == 200
         assert "version" in backup_res.json()
+
+
+@pytest.mark.asyncio
+async def test_tab_html_routes_and_navigation(mock_app):
+    transport = ASGITransport(app=mock_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        tab_routes = [
+            "/admin",
+            "/admin/overview",
+            "/admin/media",
+            "/admin/unmatched",
+            "/admin/bots",
+            "/admin/tools",
+            "/admin/tokens",
+            "/admin/settings",
+        ]
+        for route in tab_routes:
+            res = await client.get(route)
+            assert res.status_code == 200
+            assert "text/html" in res.headers["content-type"]
+            html = res.text
+            # Verify critical navigation elements are present
+            assert "id=\"mobile-bottom-bar\"" in html
+            assert "id=\"nav-container\"" in html
+            assert "function switchTab(" in html
+            assert "function getTabFromUrl(" in html
+            assert ".tab-pane.hidden" in html
+            assert "display: none !important" in html
+            assert "id=\"tab-overview\"" in html
+            assert "id=\"tab-media\"" in html
+            assert "id=\"tab-tools\"" in html
+            assert "id=\"tab-tokens\"" in html
+            assert "id=\"tab-settings\"" in html
+

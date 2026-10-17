@@ -13,6 +13,13 @@ dashboard_router = APIRouter(tags=["Admin Dashboard"])
 
 @dashboard_router.get("", response_class=HTMLResponse)
 @dashboard_router.get("/", response_class=HTMLResponse)
+@dashboard_router.get("/overview", response_class=HTMLResponse)
+@dashboard_router.get("/media", response_class=HTMLResponse)
+@dashboard_router.get("/unmatched", response_class=HTMLResponse)
+@dashboard_router.get("/bots", response_class=HTMLResponse)
+@dashboard_router.get("/tools", response_class=HTMLResponse)
+@dashboard_router.get("/tokens", response_class=HTMLResponse)
+@dashboard_router.get("/settings", response_class=HTMLResponse)
 async def dashboard_page():
     return HTMLResponse(content=DASHBOARD_HTML)
 

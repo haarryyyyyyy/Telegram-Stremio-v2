@@ -149,6 +149,27 @@ def create_app(skip_lifespan_init: bool = False) -> FastAPI:
     async def root_redirect():
         return RedirectResponse(url="/admin")
 
+    @app.get("/media/manage", include_in_schema=False)
+    @app.get("/media", include_in_schema=False)
+    async def legacy_media_redirect():
+        return RedirectResponse(url="/admin#media")
+
+    @app.get("/settings", include_in_schema=False)
+    async def legacy_settings_redirect():
+        return RedirectResponse(url="/admin#settings")
+
+    @app.get("/tools", include_in_schema=False)
+    async def legacy_tools_redirect():
+        return RedirectResponse(url="/admin#tools")
+
+    @app.get("/tokens", include_in_schema=False)
+    async def legacy_tokens_redirect():
+        return RedirectResponse(url="/admin#tokens")
+
+    @app.get("/bots", include_in_schema=False)
+    async def legacy_bots_redirect():
+        return RedirectResponse(url="/admin#bots")
+
     # Mount routers
     app.include_router(dashboard_router, prefix="/admin")
     app.include_router(dashboard_router, prefix="/dashboard")

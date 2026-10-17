@@ -1,4 +1,4 @@
-DASHBOARD_HTML = """<!DOCTYPE html>
+DASHBOARD_HTML = r"""<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
@@ -249,6 +249,38 @@ body::before {
     box-shadow: 0 0 15px color-mix(in srgb, var(--primary) 45%, transparent);
 }
 
+/* Bulletproof Tab Visibility */
+.hidden {
+    display: none !important;
+}
+.tab-pane {
+    display: block;
+    width: 100%;
+    animation: fadeIn 0.15s ease-out;
+}
+.tab-pane.hidden {
+    display: none !important;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.mobile-nav-btn {
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    color: var(--text-sec);
+}
+.mobile-nav-btn.active {
+    color: var(--primary) !important;
+}
+.mobile-nav-btn.active i {
+    transform: translateY(-2px) scale(1.15);
+    color: var(--primary) !important;
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--primary) 60%, transparent));
+}
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+
 #toast-container {
     position: fixed;
     top: 1.25rem;
@@ -333,7 +365,7 @@ body::before {
 </style>
 </head>
 
-<body class="pt-24 pb-12 antialiased">
+<body class="pt-24 pb-24 md:pb-12 antialiased">
 
 <!-- Floating Top Glass Navbar -->
 <nav id="navbar"
@@ -355,8 +387,8 @@ body::before {
         </div>
     </div>
 
-    <!-- Desktop Nav Links -->
-    <div id="nav-container" class="hidden lg:flex relative items-center gap-1 p-1 bg-black/20 rounded-full border border-hairline">
+    <!-- Desktop & Tablet Nav Links -->
+    <div id="nav-container" class="hidden md:flex relative items-center gap-1 p-1 bg-black/20 rounded-full border border-hairline overflow-x-auto max-w-[55vw] lg:max-w-none scrollbar-none">
         <button onclick="switchTab('overview')" class="nav-link pill-active" data-tab="overview">
             <i class="fa-solid fa-gauge-high text-xs"></i> Overview
         </button>
@@ -391,35 +423,71 @@ body::before {
         <button onclick="refreshDashboard()" title="Refresh" class="w-9 h-9 rounded-full bg-surface hover:bg-surface-2 flex items-center justify-center text-text-sec hover:text-text border border-hairline transition">
             <i id="global-refresh-icon" class="fa-solid fa-arrows-rotate text-sm"></i>
         </button>
-        <button id="mobile-toggle-btn" onclick="toggleMobileNav()" class="lg:hidden w-9 h-9 rounded-full bg-surface flex items-center justify-center text-text-sec hover:text-text border border-hairline transition">
+        <button id="mobile-toggle-btn" onclick="toggleMobileNav()" class="md:hidden w-9 h-9 rounded-full bg-surface flex items-center justify-center text-text-sec hover:text-text border border-hairline transition" title="Menu">
             <i id="mobile-toggle-icon" class="fa-solid fa-bars text-sm"></i>
         </button>
     </div>
 
     <!-- Mobile Drawer -->
-    <div id="mobile-menu" class="hidden absolute top-[calc(100%+8px)] left-0 w-full glass-panel p-3 flex flex-col gap-1.5 lg:hidden shadow-strong z-50">
-        <button onclick="switchTab('overview'); toggleMobileNav()" class="px-4 py-2.5 rounded-xl hover:bg-surface text-left font-medium text-sm flex items-center gap-3">
+    <div id="mobile-menu" class="hidden absolute top-[calc(100%+8px)] left-0 w-full glass-panel p-3 flex flex-col gap-1.5 md:hidden shadow-strong z-50">
+        <button onclick="switchTab('overview'); toggleMobileNav()" data-tab="overview" class="mobile-drawer-btn px-4 py-2.5 rounded-xl hover:bg-surface text-left font-medium text-sm flex items-center gap-3">
             <i class="fa-solid fa-gauge-high text-primary"></i> Overview
         </button>
-        <button onclick="switchTab('media'); toggleMobileNav()" class="px-4 py-2.5 rounded-xl hover:bg-surface text-left font-medium text-sm flex items-center gap-3">
+        <button onclick="switchTab('media'); toggleMobileNav()" data-tab="media" class="mobile-drawer-btn px-4 py-2.5 rounded-xl hover:bg-surface text-left font-medium text-sm flex items-center gap-3">
             <i class="fa-solid fa-clapperboard text-primary"></i> Media
         </button>
-        <button onclick="switchTab('unmatched'); toggleMobileNav()" class="px-4 py-2.5 rounded-xl hover:bg-surface text-left font-medium text-sm flex items-center gap-3">
+        <button onclick="switchTab('unmatched'); toggleMobileNav()" data-tab="unmatched" class="mobile-drawer-btn px-4 py-2.5 rounded-xl hover:bg-surface text-left font-medium text-sm flex items-center gap-3">
             <i class="fa-solid fa-list-check text-primary"></i> Queue
         </button>
-        <button onclick="switchTab('bots'); toggleMobileNav()" class="px-4 py-2.5 rounded-xl hover:bg-surface text-left font-medium text-sm flex items-center gap-3">
+        <button onclick="switchTab('bots'); toggleMobileNav()" data-tab="bots" class="mobile-drawer-btn px-4 py-2.5 rounded-xl hover:bg-surface text-left font-medium text-sm flex items-center gap-3">
             <i class="fa-solid fa-robot text-primary"></i> Bots
         </button>
-        <button onclick="switchTab('tools'); toggleMobileNav()" class="px-4 py-2.5 rounded-xl hover:bg-surface text-left font-medium text-sm flex items-center gap-3">
+        <button onclick="switchTab('tools'); toggleMobileNav()" data-tab="tools" class="mobile-drawer-btn px-4 py-2.5 rounded-xl hover:bg-surface text-left font-medium text-sm flex items-center gap-3">
             <i class="fa-solid fa-screwdriver-wrench text-primary"></i> Tools &amp; Re-Index
         </button>
-        <button onclick="switchTab('tokens'); toggleMobileNav()" class="px-4 py-2.5 rounded-xl hover:bg-surface text-left font-medium text-sm flex items-center gap-3">
+        <button onclick="switchTab('tokens'); toggleMobileNav()" data-tab="tokens" class="mobile-drawer-btn px-4 py-2.5 rounded-xl hover:bg-surface text-left font-medium text-sm flex items-center gap-3">
             <i class="fa-solid fa-key text-primary"></i> Tokens &amp; Stremio
         </button>
-        <button onclick="switchTab('settings'); toggleMobileNav()" class="px-4 py-2.5 rounded-xl hover:bg-surface text-left font-medium text-sm flex items-center gap-3">
+        <button onclick="switchTab('settings'); toggleMobileNav()" data-tab="settings" class="mobile-drawer-btn px-4 py-2.5 rounded-xl hover:bg-surface text-left font-medium text-sm flex items-center gap-3">
             <i class="fa-solid fa-gear text-primary"></i> Settings
         </button>
     </div>
+</nav>
+
+<!-- Fixed Mobile Bottom Navigation Bar (Visible on mobile screens < 768px) -->
+<nav id="mobile-bottom-bar"
+  class="md:hidden fixed bottom-0 left-0 right-0 z-50
+  glass-panel glass-nav border-t border-hairline px-1 py-1.5
+  flex items-center justify-around shadow-[0_-8px_25px_rgba(0,0,0,0.5)]">
+    <button onclick="switchTab('overview')" data-tab="overview" class="mobile-nav-btn active flex-1 flex flex-col items-center justify-center py-1 rounded-xl">
+        <i class="fa-solid fa-gauge-high text-sm mb-0.5"></i>
+        <span class="text-[9px] font-bold tracking-tight">Overview</span>
+    </button>
+    <button onclick="switchTab('media')" data-tab="media" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1 rounded-xl">
+        <i class="fa-solid fa-clapperboard text-sm mb-0.5"></i>
+        <span class="text-[9px] font-bold tracking-tight">Media</span>
+    </button>
+    <button onclick="switchTab('unmatched')" data-tab="unmatched" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1 rounded-xl relative">
+        <i class="fa-solid fa-list-check text-sm mb-0.5"></i>
+        <span class="text-[9px] font-bold tracking-tight">Queue</span>
+        <span id="mobile-unmatched-dot" class="hidden absolute top-1 right-3 w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+    </button>
+    <button onclick="switchTab('bots')" data-tab="bots" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1 rounded-xl">
+        <i class="fa-solid fa-robot text-sm mb-0.5"></i>
+        <span class="text-[9px] font-bold tracking-tight">Bots</span>
+    </button>
+    <button onclick="switchTab('tools')" data-tab="tools" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1 rounded-xl">
+        <i class="fa-solid fa-screwdriver-wrench text-sm mb-0.5"></i>
+        <span class="text-[9px] font-bold tracking-tight">Tools</span>
+    </button>
+    <button onclick="switchTab('tokens')" data-tab="tokens" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1 rounded-xl">
+        <i class="fa-solid fa-key text-sm mb-0.5"></i>
+        <span class="text-[9px] font-bold tracking-tight">Tokens</span>
+    </button>
+    <button onclick="switchTab('settings')" data-tab="settings" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1 rounded-xl">
+        <i class="fa-solid fa-gear text-sm mb-0.5"></i>
+        <span class="text-[9px] font-bold tracking-tight">Settings</span>
+    </button>
 </nav>
 
 <!-- Main Container -->
@@ -1308,31 +1376,98 @@ function formatDuration(seconds) {
 }
 
 function switchTab(tabId, filter = null) {
+    if (!tabId) tabId = 'overview';
     currentTab = tabId;
-    document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
-    const target = document.getElementById('tab-' + tabId);
-    if (target) target.classList.remove('hidden');
 
+    // 1. Dual-layer bulletproof DOM visibility toggle (classes + explicit style.display)
+    document.querySelectorAll('.tab-pane').forEach(el => {
+        el.classList.add('hidden');
+        el.style.display = 'none';
+    });
+
+    const target = document.getElementById('tab-' + tabId);
+    if (target) {
+        target.classList.remove('hidden');
+        target.style.display = 'block';
+    }
+
+    // 2. Update active pill indicators on Desktop/Tablet nav
     document.querySelectorAll('.nav-link').forEach(btn => {
         btn.classList.toggle('pill-active', btn.getAttribute('data-tab') === tabId);
     });
 
-    if (tabId === 'overview') {
-        refreshDashboard();
-    } else if (tabId === 'media') {
-        setMediaFilter(filter);
-    } else if (tabId === 'unmatched') {
-        loadUnmatchedQueue();
-    } else if (tabId === 'bots') {
-        loadBots();
-    } else if (tabId === 'tools') {
-        loadTools();
-    } else if (tabId === 'tokens') {
-        loadTokens();
-    } else if (tabId === 'settings') {
-        loadSettings();
+    // 3. Update active pill indicators on Mobile bottom bar
+    document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
+    });
+
+    // 4. Update active highlight in Mobile drawer menu
+    document.querySelectorAll('.mobile-drawer-btn').forEach(btn => {
+        const isActive = btn.getAttribute('data-tab') === tabId;
+        btn.classList.toggle('bg-primary/20', isActive);
+        btn.classList.toggle('text-primary', isActive);
+    });
+
+    // 5. Update browser URL hash for bookmarking and back/forward navigation
+    try {
+        if (window.location.hash !== '#' + tabId) {
+            history.pushState(null, '', '#' + tabId);
+        }
+    } catch (e) {}
+
+    // 6. Scroll smoothly to top of view
+    try {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {}
+
+    // 7. Load tab data safely inside try/catch so network errors never freeze the UI
+    try {
+        if (tabId === 'overview') {
+            refreshDashboard();
+        } else if (tabId === 'media') {
+            setMediaFilter(filter);
+        } else if (tabId === 'unmatched') {
+            loadUnmatchedQueue();
+        } else if (tabId === 'bots') {
+            loadBots();
+        } else if (tabId === 'tools') {
+            loadTools();
+        } else if (tabId === 'tokens') {
+            loadTokens();
+        } else if (tabId === 'settings') {
+            loadSettings();
+        }
+    } catch (err) {
+        console.error('Error loading tab content for ' + tabId + ':', err);
     }
 }
+
+function getTabFromUrl() {
+    const hash = (window.location.hash || '').replace('#', '').trim().toLowerCase();
+    if (hash && document.getElementById('tab-' + hash)) return hash;
+
+    const path = (window.location.pathname || '')
+        .replace(/^\/(admin|dashboard)/, '')
+        .replace(/^\/+|\/+$/g, '')
+        .toLowerCase();
+    if (path && document.getElementById('tab-' + path)) return path;
+
+    return 'overview';
+}
+
+window.addEventListener('hashchange', () => {
+    const tab = getTabFromUrl();
+    if (tab && tab !== currentTab) {
+        switchTab(tab);
+    }
+});
+
+window.addEventListener('popstate', () => {
+    const tab = getTabFromUrl();
+    if (tab && tab !== currentTab) {
+        switchTab(tab);
+    }
+});
 
 function toggleMobileNav() {
     const menu = document.getElementById('mobile-menu');
@@ -2353,7 +2488,9 @@ async function exportBackup() {
 
 // Initial Run
 document.addEventListener('DOMContentLoaded', () => {
-    refreshDashboard();
+    const initialTab = getTabFromUrl();
+    switchTab(initialTab);
+
     liveStreamsInterval = setInterval(() => {
         if (currentTab === 'overview') {
             loadLiveStreams();
